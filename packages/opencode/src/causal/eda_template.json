@@ -1,0 +1,314 @@
+{
+  "eda_metadata": {
+    "analysis_date": "YYYY-MM-DD",
+    "analyst": "analyst_name",
+    "dataset_path": "path/to/dataset",
+    "dataset_format": "csv|parquet|json|stata|sas",
+    "total_observations": 0,
+    "total_variables": 0,
+    "analysis_version": "1.0",
+    "causal_framing_reference": "path/to/framing.json"
+  },
+  "data_profiling": {
+    "variables": {
+      "variable_name": {
+        "type": "binary|continuous|categorical|count|time_to_event",
+        "role": "treatment|outcome|covariate|instrument|mediator|moderator",
+        "description": "Variable description",
+        "missing_count": 0,
+        "missing_percentage": 0.0,
+        "unique_values": 0,
+        "distribution": {
+          "for_binary": {
+            "0": 0,
+            "1": 0,
+            "rate": 0.0
+          },
+          "for_categorical": {
+            "category_counts": {},
+            "category_percentages": {}
+          },
+          "for_continuous": {
+            "mean": 0.0,
+            "median": 0.0,
+            "std": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "q25": 0.0,
+            "q75": 0.0,
+            "skewness": 0.0,
+            "kurtosis": 0.0,
+            "outliers_count": 0,
+            "outliers_percentage": 0.0
+          }
+        },
+        "validation": "PASS|WARNING|FAIL - validation message",
+        "data_quality_issues": []
+      }
+    },
+    "overall_data_quality": {
+      "total_observations": 0,
+      "complete_cases": 0,
+      "complete_case_percentage": 0.0,
+      "critical_variables_missingness": "ASSESSMENT",
+      "data_quality_score": 0.0,
+      "duplicate_records": 0,
+      "duplicate_percentage": 0.0
+    }
+  },
+  "missingness_analysis": {
+    "patterns": {
+      "monotone_missing": false,
+      "missing_at_random_evidence": "Description of missingness patterns",
+      "missingness_correlation": {
+        "variable_pairs": {}
+      },
+      "missingness_heatmap_data": "matrix_data_for_visualization"
+    },
+    "missingness_mechanism": {
+      "assessment": "MCAR|MAR|MNAR",
+      "rationale": "Justification for assessment",
+      "recommendation": "Recommended handling approach"
+    },
+    "impact_assessment": {
+      "treatment_effect_bias_risk": "LOW|MODERATE|HIGH",
+      "selection_bias_risk": "LOW|MODERATE|HIGH",
+      "recommended_approach": "complete_case|multiple_imputation|inverse_probability_weighting"
+    }
+  },
+  "overlap_positivity_assessment": {
+    "propensity_score_analysis": {
+      "model": "Description of propensity score model",
+      "propensity_score_range": {
+        "min": 0.0,
+        "max": 1.0,
+        "mean": 0.0,
+        "median": 0.0
+      },
+      "overlap_statistics": {
+        "observations_in_0.1_0.9_range": 0,
+        "percentage_in_overlap": 0.0,
+        "treated_in_overlap": 0,
+        "control_in_overlap": 0
+      },
+      "positivity_violation": {
+        "count_below_0.1": 0,
+        "count_above_0.9": 0,
+        "total_violations": 0,
+        "violation_percentage": 0.0
+      }
+    },
+    "covariate_balance": {
+      "standardized_mean_differences": {
+        "variable_name": 0.0
+      },
+      "balance_assessment": {
+        "variables_balanced_smd_0.1": [],
+        "variables_moderately_imbalanced_smd_0.1_0.2": [],
+        "variables_imbalanced_smd_0.2": [],
+        "overall_balance": "GOOD|MODERATE|POOR"
+      }
+    },
+    "positivity_validation": {
+      "criteria_met": "PASS|FAIL",
+      "recommendation": "Recommendations for improving overlap"
+    }
+  },
+  "correlation_analysis": {
+    "treatment_covariate_correlations": {
+      "variable_name": 0.0
+    },
+    "outcome_correlations": {
+      "outcome_variable": {
+        "correlation_with_treatment": 0.0,
+        "correlations_with_covariates": {}
+      }
+    },
+    "multicollinearity_check": {
+      "variance_inflation_factors": {
+        "variable_name": 0.0
+      },
+      "multicollinearity_assessment": "PASS|WARNING|FAIL"
+    },
+    "instrument_relevance": {
+      "first_stage_f_statistic": 0.0,
+      "instrument_treatment_correlation": 0.0,
+      "compliance_rates": {
+        "always_takers": 0.0,
+        "never_takers": 0.0,
+        "compliers": 0.0
+      },
+      "instrument_strength": "WEAK|MODERATE|STRONG"
+    }
+  },
+  "temporal_structure_validation": {
+    "baseline_followup_consistency": {
+      "age_consistency": "PASS|FAIL",
+      "education_consistency": "PASS|FAIL",
+      "temporal_ordering": "PASS|FAIL"
+    },
+    "longitudinal_patterns": {
+      "attrition_analysis": {
+        "baseline_complete": 0,
+        "followup_complete": 0,
+        "attrition_rate": 0.0,
+        "differential_attrition": {
+          "treated_attrition": 0.0,
+          "control_attrition": 0.0,
+          "attrition_difference": 0.0
+        }
+      },
+      "attrition_assessment": "ACCEPTABLE|CONCERNING|SEVERE"
+    }
+  },
+  "causal_assumptions_testing": {
+    "conditional_independence": {
+      "test_method": "Description of test",
+      "test_statistic": 0.0,
+      "p_value": 0.0,
+      "assessment": "SUPPORTED|VIOLATED|INCONCLUSIVE",
+      "sensitivity_analysis": "Results of sensitivity analysis"
+    },
+    "parallel_trends": {
+      "pre_treatment_trend_test": {
+        "test_statistic": 0.0,
+        "p_value": 0.0,
+        "assessment": "SUPPORTED|VIOLATED|INCONCLUSIVE"
+      },
+      "event_study_results": "Summary of event study analysis"
+    },
+    "instrument_validity": {
+      "relevance_test": {
+        "f_statistic": 0.0,
+        "assessment": "STRONG|MODERATE|WEAK"
+      },
+      "exclusion_test": {
+        "test_method": "Description",
+        "p_value": 0.0,
+        "assessment": "SUPPORTED|VIOLATED|INCONCLUSIVE"
+      }
+    },
+    "monotonicity": {
+      "test_method": "Description of test",
+      "defiers_detected": false,
+      "assessment": "SUPPORTED|VIOLATED|INCONCLUSIVE"
+    }
+  },
+  "validation_outcomes": {
+    "missingness_validation": {
+      "criteria": "Validation criteria description",
+      "result": "PASS|FAIL|WARNING",
+      "details": "Detailed explanation"
+    },
+    "balance_validation": {
+      "criteria": "Standardized mean differences < 0.2",
+      "result": "PASS|FAIL|WARNING",
+      "details": "Detailed explanation"
+    },
+    "overlap_validation": {
+      "criteria": "Propensity scores between 0.1-0.9 for at least 80% of sample",
+      "result": "PASS|FAIL|WARNING",
+      "details": "Detailed explanation"
+    },
+    "multicollinearity_validation": {
+      "criteria": "VIF < 5 for all covariates",
+      "result": "PASS|FAIL|WARNING",
+      "details": "Detailed explanation"
+    },
+    "temporal_ordering_validation": {
+      "criteria": "Treatment precedes outcomes in all observations",
+      "result": "PASS|FAIL|WARNING",
+      "details": "Detailed explanation"
+    }
+  },
+  "key_risks_and_recommendations": {
+    "risks": [
+      {
+        "risk": "Risk description",
+        "severity": "LOW|MODERATE|HIGH|CRITICAL",
+        "description": "Detailed risk description",
+        "mitigation": "Recommended mitigation strategy"
+      }
+    ],
+    "recommendations": [
+      "Specific recommendation for analysis",
+      "Data preprocessing recommendations",
+      "Model specification recommendations"
+    ]
+  },
+  "visualization_recommendations": {
+    "required_plots": [
+      {
+        "type": "propensity_score_distribution",
+        "description": "Histogram of propensity scores by treatment group",
+        "purpose": "Assess overlap and positivity",
+        "file_path": "plots/propensity_scores.png"
+      },
+      {
+        "type": "love_plot",
+        "description": "Standardized mean differences before and after adjustment",
+        "purpose": "Visualize covariate balance",
+        "file_path": "plots/love_plot.png"
+      },
+      {
+        "type": "missingness_pattern",
+        "description": "Heatmap of missing data patterns",
+        "purpose": "Identify missingness mechanisms",
+        "file_path": "plots/missingness_pattern.png"
+      },
+      {
+        "type": "correlation_matrix",
+        "description": "Correlation matrix of key variables",
+        "purpose": "Identify multicollinearity and relationships",
+        "file_path": "plots/correlation_matrix.png"
+      },
+      {
+        "type": "outcome_distributions",
+        "description": "Boxplots/violin plots of outcomes by treatment",
+        "purpose": "Show treatment effects visually",
+        "file_path": "plots/outcome_distributions.png"
+      }
+    ],
+    "optional_plots": [
+      {
+        "type": "event_study",
+        "description": "Event study coefficients for DiD designs",
+        "purpose": "Test parallel trends assumption",
+        "file_path": "plots/event_study.png"
+      },
+      {
+        "type": "compliance_plot",
+        "description": "Sankey diagram of assignment to treatment compliance",
+        "purpose": "Illustrate IV compliance patterns",
+        "file_path": "plots/compliance_plot.png"
+      }
+    ]
+  },
+  "next_steps": {
+    "immediate_actions": [
+      "Generate recommended visualizations",
+      "Address data quality issues",
+      "Finalize analysis dataset"
+    ],
+    "analysis_pipeline": [
+      "Propensity score estimation and adjustment",
+      "Primary causal effect estimation",
+      "Sensitivity analyses",
+      "Robustness checks"
+    ],
+    "reporting_requirements": [
+      "Document data preprocessing decisions",
+      "Report assumption test results",
+      "Include limitation discussions"
+    ]
+  },
+  "quality_checks": {
+    "automated_tests": {
+      "data_schema_validation": "PASS|FAIL",
+      "missingness_thresholds": "PASS|FAIL",
+      "overlap_requirements": "PASS|FAIL",
+      "balance_thresholds": "PASS|FAIL"
+    },
+    "manual_review_required": ["List of items requiring manual expert review"]
+  }
+}

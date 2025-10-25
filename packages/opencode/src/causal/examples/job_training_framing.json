@@ -1,0 +1,207 @@
+{
+  "research_question": "What is the causal effect of job training programs on employment outcomes for displaced workers?",
+  "background": "Job training programs are commonly used policy interventions to help unemployed workers gain new skills and find employment. However, selection into these programs is often non-random, with more motivated or skilled workers more likely to participate. This framing addresses the causal question of whether these programs actually improve employment outcomes.",
+  "variables": [
+    {
+      "name": "job_training",
+      "type": "binary",
+      "description": "Participation in job training program (1 = participated, 0 = did not participate)",
+      "role": "treatment",
+      "measurement": "Program enrollment records",
+      "validation": {
+        "required": true,
+        "range": [0, 1]
+      }
+    },
+    {
+      "name": "employment_status",
+      "type": "binary",
+      "description": "Employment status 6 months after program completion (1 = employed, 0 = unemployed)",
+      "role": "outcome",
+      "measurement": "Survey or administrative records",
+      "validation": {
+        "required": true,
+        "range": [0, 1]
+      }
+    },
+    {
+      "name": "earnings",
+      "type": "continuous",
+      "description": "Monthly earnings 6 months after program completion",
+      "role": "outcome",
+      "measurement": "Tax or administrative records",
+      "validation": {
+        "required": false
+      }
+    },
+    {
+      "name": "age",
+      "type": "continuous",
+      "description": "Age of the worker in years",
+      "role": "covariate",
+      "validation": {
+        "required": true,
+        "range": [18, 65]
+      }
+    },
+    {
+      "name": "education",
+      "type": "categorical",
+      "description": "Highest level of education completed",
+      "role": "covariate",
+      "validation": {
+        "required": true,
+        "categories": ["less_than_high_school", "high_school", "some_college", "bachelor", "graduate"]
+      }
+    },
+    {
+      "name": "prior_experience",
+      "type": "continuous",
+      "description": "Years of work experience in previous field",
+      "role": "covariate",
+      "validation": {
+        "required": true,
+        "range": [0, 50]
+      }
+    },
+    {
+      "name": "unemployment_duration",
+      "type": "continuous",
+      "description": "Duration of unemployment in months before program",
+      "role": "covariate",
+      "validation": {
+        "required": true,
+        "range": [0, 60]
+      }
+    },
+    {
+      "name": "local_unemployment_rate",
+      "type": "continuous",
+      "description": "Local unemployment rate at time of program entry",
+      "role": "covariate",
+      "validation": {
+        "required": true,
+        "range": [0, 1]
+      }
+    },
+    {
+      "name": "program_assignment",
+      "type": "binary",
+      "description": "Random assignment to job training program eligibility (1 = eligible, 0 = not eligible)",
+      "role": "instrument",
+      "measurement": "Randomized eligibility determination",
+      "validation": {
+        "required": false,
+        "range": [0, 1]
+      }
+    }
+  ],
+  "estimand": {
+    "type": "LATE",
+    "description": "Local average treatment effect for compliers (those who participate when eligible but not when ineligible)",
+    "target_population": "Displaced workers who would participate in job training if made eligible but would not participate if ineligible",
+    "treatment_levels": ["0", "1"],
+    "outcome_scale": "difference"
+  },
+  "study_design": {
+    "type": "instrumental",
+    "description": "Instrumental variables design using randomized program eligibility as instrument for actual participation",
+    "assignment_mechanism": "Randomized eligibility determination with voluntary participation",
+    "data_collection_method": "Administrative program records combined with employment outcome data",
+    "temporal_structure": "longitudinal"
+  },
+  "assumptions": [
+    {
+      "name": "Instrument Relevance",
+      "description": "Program eligibility strongly affects actual participation in job training",
+      "type": "identifiability",
+      "status": "testable",
+      "test_method": "First-stage F-statistic from 2SLS regression",
+      "rationale": "Weak instruments produce biased and inconsistent LATE estimates"
+    },
+    {
+      "name": "Instrument Exclusion",
+      "description": "Program eligibility affects employment outcomes only through actual participation in training",
+      "type": "identifiability",
+      "status": "assumed",
+      "test_method": "Overidentification tests if multiple instruments available",
+      "rationale": "Core IV assumption ensuring instrument affects outcome only through treatment"
+    },
+    {
+      "name": "Independence",
+      "description": "Randomized eligibility is independent of potential outcomes and participation decisions",
+      "type": "identifiability",
+      "status": "assumed",
+      "test_method": "Balance tests on baseline covariates across eligibility groups",
+      "rationale": "Randomization ensures independence from confounders"
+    },
+    {
+      "name": "Monotonicity",
+      "description": "No defiers - no workers who would participate only when ineligible",
+      "type": "identifiability",
+      "status": "assumed",
+      "rationale": "Ensures LATE interpretation as effect for compliers"
+    },
+    {
+      "name": "Stable Unit Treatment Value",
+      "description": "One worker's participation does not affect another's employment outcome",
+      "type": "identifiability",
+      "status": "assumed",
+      "rationale": "No spillover effects between workers"
+    }
+  ],
+  "validation_criteria": [
+    {
+      "name": "First Stage Strength",
+      "description": "F-statistic from first-stage regression should exceed conventional threshold",
+      "threshold": 10,
+      "test": "2SLS first-stage regression F-statistic",
+      "required": true
+    },
+    {
+      "name": "Randomization Balance",
+      "description": "Baseline covariates should be balanced across eligibility groups",
+      "threshold": "Standardized mean differences < 0.1",
+      "test": "Balance tests across randomized groups",
+      "required": true
+    },
+    {
+      "name": "Compliance Rate",
+      "description": "Sufficient compliance with randomized assignment",
+      "threshold": "Compliance rate > 0.1",
+      "test": "Participation rates by eligibility status",
+      "required": true
+    },
+    {
+      "name": "Exclusion Restriction Test",
+      "description": "Test for direct effects of eligibility on outcomes",
+      "threshold": "p > 0.05 for direct effect",
+      "test": "Overidentification test with multiple instruments",
+      "required": false
+    }
+  ],
+  "data_requirements": {
+    "sample_size": 1000,
+    "time_periods": 2,
+    "required_variables": [
+      "job_training",
+      "employment_status",
+      "program_assignment",
+      "age",
+      "education",
+      "prior_experience",
+      "unemployment_duration",
+      "local_unemployment_rate"
+    ],
+    "data_structure": "Individual-level panel data with baseline and follow-up observations"
+  },
+  "limitations": [
+    "LATE only identifies effect for compliers, not all workers",
+    "Results may not generalize to other job training programs or populations",
+    "Potential for spillover effects if labor market is tight",
+    "Measurement error in employment outcomes could bias estimates",
+    "Long-term effects beyond 6 months are not captured"
+  ],
+  "created_at": "2025-10-25T00:00:00.000Z",
+  "updated_at": "2025-10-25T00:00:00.000Z"
+}

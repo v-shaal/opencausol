@@ -1,0 +1,117 @@
+{
+  "research_question": "What is the causal effect of [TREATMENT] on [OUTCOME] for [POPULATION]?",
+  "background": "This is a template framing document that can be customized for specific causal inference projects. Replace the bracketed placeholders with your specific research context.",
+  "variables": [
+    {
+      "name": "treatment",
+      "type": "binary",
+      "description": "Primary treatment/exposure variable of interest",
+      "role": "treatment",
+      "validation": {
+        "required": true,
+        "range": [0, 1]
+      }
+    },
+    {
+      "name": "outcome",
+      "type": "continuous",
+      "description": "Primary outcome variable to be measured",
+      "role": "outcome",
+      "validation": {
+        "required": true
+      }
+    },
+    {
+      "name": "confounder1",
+      "type": "continuous",
+      "description": "Potential confounding variable",
+      "role": "covariate",
+      "validation": {
+        "required": false
+      }
+    },
+    {
+      "name": "confounder2",
+      "type": "categorical",
+      "description": "Categorical confounding variable",
+      "role": "covariate",
+      "validation": {
+        "required": false,
+        "categories": ["category1", "category2", "category3"]
+      }
+    }
+  ],
+  "estimand": {
+    "type": "ATE",
+    "description": "Average treatment effect across the entire target population",
+    "target_population": "All units in the study sample",
+    "outcome_scale": "difference"
+  },
+  "study_design": {
+    "type": "observational",
+    "description": "Observational study where treatment assignment occurs naturally",
+    "assignment_mechanism": "Natural selection or self-selection",
+    "data_collection_method": "Retrospective data analysis",
+    "temporal_structure": "cross_sectional"
+  },
+  "assumptions": [
+    {
+      "name": "Conditional Independence",
+      "description": "Treatment assignment is independent of potential outcomes given observed covariates",
+      "type": "identifiability",
+      "status": "assumed",
+      "test_method": "Balance tests after propensity score adjustment",
+      "rationale": "Core assumption for identifying causal effects in observational studies"
+    },
+    {
+      "name": "Positivity",
+      "description": "Every covariate combination has non-zero probability of receiving each treatment level",
+      "type": "identifiability",
+      "status": "testable",
+      "test_method": "Propensity score distribution analysis",
+      "rationale": "Ensures overlap between treatment groups for valid comparison"
+    },
+    {
+      "name": "Consistency",
+      "description": "The observed outcome for each unit equals its potential outcome under the actual treatment received",
+      "type": "structural",
+      "status": "assumed",
+      "rationale": "Links potential outcomes framework to observed data"
+    }
+  ],
+  "validation_criteria": [
+    {
+      "name": "Covariate Balance",
+      "description": "Standardized mean differences between treatment groups should be minimal after adjustment",
+      "threshold": 0.1,
+      "test": "Calculate standardized mean differences for all covariates",
+      "required": true
+    },
+    {
+      "name": "Overlap Assessment",
+      "description": "Propensity scores should show sufficient overlap between treatment groups",
+      "threshold": "0.1-0.9",
+      "test": "Examine propensity score distributions",
+      "required": true
+    },
+    {
+      "name": "Model Specification",
+      "description": "Statistical models should be correctly specified",
+      "threshold": "p > 0.05 for specification tests",
+      "test": "Residual analysis and goodness-of-fit tests",
+      "required": true
+    }
+  ],
+  "data_requirements": {
+    "required_variables": ["treatment", "outcome"],
+    "sample_size": 100,
+    "data_structure": "Tabular dataset with one row per observation unit"
+  },
+  "limitations": [
+    "Unmeasured confounding may bias effect estimates",
+    "Results may not generalize beyond study population",
+    "Cross-sectional design limits causal inference for temporal relationships"
+  ],
+  "created_at": "2025-10-25T00:00:00.000Z",
+  "updated_at": "2025-10-25T00:00:00.000Z"
+}

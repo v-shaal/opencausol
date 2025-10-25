@@ -1,0 +1,464 @@
+{
+  "research_question": "What is the causal effect of [TREATMENT] on [OUTCOME] for [POPULATION] in a general causal analysis workflow?",
+  "background": "This comprehensive workflow framing document provides a structured template for conducting causal inference analyses across various domains and research questions. It encompasses the full causal analysis pipeline from problem formulation through validation and interpretation. The template is designed to be adaptable to different study designs, data structures, and causal estimands while maintaining rigorous methodological standards. It supports both experimental and observational settings, with appropriate assumptions and validation criteria for each approach.",
+  "variables": [
+    {
+      "name": "treatment",
+      "type": "binary",
+      "description": "Primary treatment or exposure variable of interest (1 = treated, 0 = control)",
+      "role": "treatment",
+      "measurement": "Defined based on study context (e.g., intervention assignment, exposure assessment)",
+      "validation": {
+        "required": true,
+        "range": [0, 1],
+        "missingness_threshold": 0.05
+      }
+    },
+    {
+      "name": "outcome",
+      "type": "continuous",
+      "description": "Primary outcome variable to be measured post-treatment",
+      "role": "outcome",
+      "measurement": "Standardized measurement appropriate to outcome type",
+      "validation": {
+        "required": true,
+        "missingness_threshold": 0.1
+      }
+    },
+    {
+      "name": "outcome_binary",
+      "type": "binary",
+      "description": "Binary version of outcome for alternative analyses",
+      "role": "outcome",
+      "validation": {
+        "required": false,
+        "range": [0, 1]
+      }
+    },
+    {
+      "name": "age",
+      "type": "continuous",
+      "description": "Age of study participant in years",
+      "role": "covariate",
+      "validation": {
+        "required": true,
+        "range": [0, 120],
+        "missingness_threshold": 0.02
+      }
+    },
+    {
+      "name": "gender",
+      "type": "categorical",
+      "description": "Gender identity of participant",
+      "role": "covariate",
+      "validation": {
+        "required": true,
+        "categories": ["male", "female", "other", "prefer_not_to_say"],
+        "missingness_threshold": 0.02
+      }
+    },
+    {
+      "name": "socioeconomic_status",
+      "type": "categorical",
+      "description": "Socioeconomic status based on composite measure",
+      "role": "covariate",
+      "validation": {
+        "required": true,
+        "categories": ["low", "medium", "high"],
+        "missingness_threshold": 0.05
+      }
+    },
+    {
+      "name": "baseline_outcome",
+      "type": "continuous",
+      "description": "Pre-treatment measurement of the outcome variable",
+      "role": "covariate",
+      "validation": {
+        "required": false,
+        "missingness_threshold": 0.1
+      }
+    },
+    {
+      "name": "comorbidity_index",
+      "type": "continuous",
+      "description": "Comorbidity or risk factor summary score",
+      "role": "covariate",
+      "validation": {
+        "required": false,
+        "range": [0, 50]
+      }
+    },
+    {
+      "name": "geographic_region",
+      "type": "categorical",
+      "description": "Geographic region or location identifier",
+      "role": "covariate",
+      "validation": {
+        "required": false,
+        "categories": ["region_1", "region_2", "region_3", "other"]
+      }
+    },
+    {
+      "name": "time_period",
+      "type": "categorical",
+      "description": "Time period of observation or enrollment",
+      "role": "covariate",
+      "validation": {
+        "required": false,
+        "categories": ["period_1", "period_2", "period_3"]
+      }
+    },
+    {
+      "name": "random_assignment",
+      "type": "binary",
+      "description": "Random assignment to treatment eligibility (for instrumental variable analysis)",
+      "role": "instrument",
+      "measurement": "Randomized assignment mechanism",
+      "validation": {
+        "required": false,
+        "range": [0, 1]
+      }
+    },
+    {
+      "name": "cluster_id",
+      "type": "categorical",
+      "description": "Cluster identifier for clustered or hierarchical data",
+      "role": "cluster",
+      "validation": {
+        "required": false
+      }
+    },
+    {
+      "name": "weight",
+      "type": "continuous",
+      "description": "Sampling or analysis weight for complex survey designs",
+      "role": "weight",
+      "validation": {
+        "required": false,
+        "range": [0, null]
+      }
+    }
+  ],
+  "estimand": {
+    "type": "ATE",
+    "description": "Average treatment effect across the entire target population",
+    "target_population": "All eligible units in the study population with complete data",
+    "treatment_levels": ["0", "1"],
+    "outcome_scale": "difference",
+    "alternative_estimands": ["ATT", "ATC", "LATE", "RR", "OR"],
+    "estimand_justification": "ATE chosen for population-level policy relevance, with alternatives available for specific research questions"
+  },
+  "study_design": {
+    "type": "flexible",
+    "description": "Adaptable design supporting randomized experiments, quasi-experiments, and observational studies",
+    "supported_designs": [
+      "randomized_controlled_trial",
+      "instrumental_variables",
+      "propensity_score_based",
+      "regression_discontinuity",
+      "difference_in_differences"
+    ],
+    "assignment_mechanism": "Varies by design: random assignment, natural experiment, or self-selection",
+    "data_collection_method": "Flexible: primary data collection, secondary data analysis, or administrative records",
+    "temporal_structure": "flexible",
+    "supported_structures": ["cross_sectional", "longitudinal", "panel", "time_series"],
+    "cluster_handling": "Supported for hierarchical or clustered data structures",
+    "missing_data_strategy": "Multiple imputation, inverse probability weighting, or complete case analysis"
+  },
+  "assumptions": [
+    {
+      "name": "Conditional Exchangeability",
+      "description": "Treatment assignment is independent of potential outcomes given observed covariates",
+      "type": "identifiability",
+      "status": "assumed",
+      "test_method": "Balance tests after adjustment, negative control outcomes, sensitivity analysis",
+      "rationale": "Core assumption for causal identification in observational studies",
+      "design_specific": "Not required for randomized experiments"
+    },
+    {
+      "name": "Positivity",
+      "description": "Every unit has non-zero probability of receiving each treatment level given covariates",
+      "type": "identifiability",
+      "status": "testable",
+      "test_method": "Propensity score distribution analysis, overlap plots, minimum effective sample size",
+      "rationale": "Ensures comparable groups for causal estimation",
+      "threshold": "Propensity scores between 0.05 and 0.95"
+    },
+    {
+      "name": "Consistency",
+      "description": "Potential outcome under observed treatment equals observed outcome",
+      "type": "identifiability",
+      "status": "assumed",
+      "test_method": "Sensitivity analysis to treatment definitions, version analysis",
+      "rationale": "Links potential outcomes to observed data"
+    },
+    {
+      "name": "No Interference",
+      "description": "One unit's treatment does not affect another unit's outcome",
+      "type": "identifiability",
+      "status": "assumed",
+      "test_method": "Spatial correlation tests, cluster-level analysis",
+      "rationale": "Ensures stable unit treatment value assumption (SUTVA)",
+      "violations": "Spillover effects, network effects, general equilibrium"
+    },
+    {
+      "name": "Correct Model Specification",
+      "description": "Statistical models correctly specify relationships between variables",
+      "type": "statistical",
+      "status": "testable",
+      "test_method": "Residual analysis, goodness-of-fit tests, cross-validation, specification tests",
+      "rationale": "Ensures valid statistical inference"
+    },
+    {
+      "name": "Independent Sampling",
+      "description": "Units are sampled independently from the target population",
+      "type": "statistical",
+      "status": "assumed",
+      "test_method": "Design effect analysis, intraclass correlation",
+      "rationale": "Standard statistical inference assumes independence",
+      "alternatives": "Cluster-robust standard errors, mixed effects models"
+    },
+    {
+      "name": "Instrument Relevance",
+      "description": "Instrument strongly affects treatment assignment",
+      "type": "identifiability",
+      "status": "testable",
+      "test_method": "First-stage F-statistic, partial R-squared",
+      "rationale": "Required for instrumental variable identification",
+      "design_specific": "Only for IV designs",
+      "threshold": "F-statistic > 10"
+    },
+    {
+      "name": "Instrument Exclusion",
+      "description": "Instrument affects outcome only through treatment",
+      "type": "identifiability",
+      "status": "assumed",
+      "test_method": "Overidentification tests, falsification tests",
+      "rationale": "Core IV assumption",
+      "design_specific": "Only for IV designs"
+    },
+    {
+      "name": "Parallel Trends",
+      "description": "Treatment and control groups would have followed parallel trends without treatment",
+      "type": "identifiability",
+      "status": "testable",
+      "test_method": "Pre-treatment trend analysis, placebo tests",
+      "rationale": "Key assumption for difference-in-differences",
+      "design_specific": "Only for DiD designs"
+    }
+  ],
+  "validation_criteria": [
+    {
+      "name": "Covariate Balance",
+      "description": "Covariates should be balanced across treatment groups after adjustment",
+      "threshold": "Standardized mean differences < 0.1",
+      "test": "Love plots, balance tables, statistical tests",
+      "required": true,
+      "design_specific": "Observational studies"
+    },
+    {
+      "name": "Positivity Assessment",
+      "description": "Sufficient overlap in propensity scores across treatment groups",
+      "threshold": "Effective sample size > 0.5 of original",
+      "test": "Propensity score distributions, overlap plots",
+      "required": true,
+      "design_specific": "Propensity score methods"
+    },
+    {
+      "name": "Instrument Strength",
+      "description": "First-stage relationship between instrument and treatment",
+      "threshold": "F-statistic > 10, partial R² > 0.01",
+      "test": "First-stage regression diagnostics",
+      "required": true,
+      "design_specific": "Instrumental variables"
+    },
+    {
+      "name": "Randomization Balance",
+      "description": "Baseline covariates balanced across randomized groups",
+      "threshold": "Standardized mean differences < 0.1",
+      "test": "Balance tests across randomization arms",
+      "required": true,
+      "design_specific": "Randomized experiments"
+    },
+    {
+      "name": "Parallel Trends Test",
+      "description": "Pre-treatment trends should be parallel between groups",
+      "threshold": "No significant pre-treatment trend differences (p > 0.05)",
+      "test": "Event study plots, pre-trend tests",
+      "required": true,
+      "design_specific": "Difference-in-differences"
+    },
+    {
+      "name": "Model Diagnostics",
+      "description": "Statistical models should pass diagnostic checks",
+      "threshold": "No severe multicollinearity (VIF < 10), homoscedasticity, normality of residuals",
+      "test": "VIF analysis, residual plots, specification tests",
+      "required": true
+    },
+    {
+      "name": "Sensitivity Analysis",
+      "description": "Estimates should be robust to reasonable unmeasured confounding",
+      "threshold": "E-value > 1.5 for meaningful effects",
+      "test": "E-value calculation, Rosenbaum bounds, bias analysis",
+      "required": true,
+      "design_specific": "Observational studies"
+    },
+    {
+      "name": "Placebo Tests",
+      "description": "No effect should be found for impossible outcomes or time periods",
+      "threshold": "p > 0.05 for placebo tests",
+      "test": "Analysis with placebo outcomes or pre-treatment periods",
+      "required": false
+    },
+    {
+      "name": "Falsification Tests",
+      "description": "Tests using known null effects should not reject null",
+      "threshold": "p > 0.05 for falsification tests",
+      "test": "Analysis with outcomes known to be unaffected",
+      "required": false
+    }
+  ],
+  "data_requirements": {
+    "sample_size": {
+      "minimum": 100,
+      "recommended": 1000,
+      "large_scale": 10000,
+      "justification": "Minimum for basic analysis, recommended for stable estimates, large-scale for subgroup analyses"
+    },
+    "time_periods": {
+      "cross_sectional": 1,
+      "longitudinal": "2+",
+      "panel": "3+",
+      "description": "Number of observation periods required by design"
+    },
+    "required_variables": ["treatment", "outcome", "age", "gender"],
+    "recommended_variables": [
+      "socioeconomic_status",
+      "baseline_outcome",
+      "comorbidity_index",
+      "geographic_region",
+      "time_period"
+    ],
+    "optional_variables": ["random_assignment", "cluster_id", "weight", "outcome_binary"],
+    "data_structure": "Individual-level dataset with one row per observation unit per time period",
+    "missing_data_policy": "Systematic missing data assessment and appropriate handling",
+    "data_quality_checks": [
+      "Range validation",
+      "Logic consistency checks",
+      "Duplicate detection",
+      "Outlier identification"
+    ]
+  },
+  "analysis_methods": [
+    {
+      "name": "Randomized Experiment Analysis",
+      "description": "Intention-to-treat and per-protocol analysis of randomized data",
+      "advantages": "Unbiased causal estimates, minimal assumptions",
+      "limitations": "May not be feasible or ethical for all questions",
+      "assumptions": ["Randomization integrity", "no attrition bias", "SUTVA"]
+    },
+    {
+      "name": "Propensity Score Matching",
+      "description": "Match treated and control units on propensity scores",
+      "advantages": "Intuitive, creates comparable groups, reduces dimensionality",
+      "limitations": "Discards data, sensitive to model specification, requires overlap",
+      "assumptions": ["Conditional exchangeability", "positivity", "consistency"]
+    },
+    {
+      "name": "Inverse Probability Weighting",
+      "description": "Weight observations by inverse probability of treatment received",
+      "advantages": "Uses full sample, estimates population ATE, handles continuous treatments",
+      "limitations": "Sensitive to extreme weights, requires positivity",
+      "assumptions": ["Conditional exchangeability", "positivity", "consistency", "no unmeasured confounding"]
+    },
+    {
+      "name": "Doubly Robust Methods",
+      "description": "Combine outcome regression with propensity scores",
+      "advantages": "Consistent if either model correct, flexible, efficient",
+      "limitations": "More complex, requires both models to be reasonable",
+      "assumptions": ["At least one of outcome or treatment model correct", "positivity", "consistency"]
+    },
+    {
+      "name": "Instrumental Variables",
+      "description": "Use instruments to address unmeasured confounding",
+      "advantages": "Addresses unmeasured confounding, local causal identification",
+      "limitations": "LATE interpretation, requires valid instrument, weak instrument problems",
+      "assumptions": ["Instrument relevance", "instrument exclusion", "independence", "monotonicity"]
+    },
+    {
+      "name": "Regression Discontinuity",
+      "description": "Exploit discontinuities in treatment assignment",
+      "advantages": "Local randomization, credible identification, transparent",
+      "limitations": "Local effects only, requires sufficient data at cutoff",
+      "assumptions": ["Continuity of potential outcomes", "no manipulation of running variable"]
+    },
+    {
+      "name": "Difference-in-Differences",
+      "description": "Compare changes over time between treatment and control groups",
+      "advantages": "Controls for time-invariant unobserved confounding, intuitive",
+      "limitations": "Requires parallel trends, sensitive to composition changes",
+      "assumptions": ["Parallel trends", "no anticipation effects", "SUTVA"]
+    },
+    {
+      "name": "Synthetic Control",
+      "description": "Construct weighted combination of control units",
+      "advantages": "Data-driven control group, transparent weights, good for case studies",
+      "limitations": "Single treated unit, pre-treatment fit requirements",
+      "assumptions": ["Convex hull condition", "no interference", "perfect predictors"]
+    },
+    {
+      "name": "Targeted Maximum Likelihood Estimation",
+      "description": "Semiparametric efficient estimation with machine learning",
+      "advantages": "Double robust, flexible, optimal bias-variance tradeoff",
+      "limitations": "Computationally intensive, complex implementation",
+      "assumptions": ["At least one model correct", "positivity", "consistency"]
+    },
+    {
+      "name": "Causal Forest Methods",
+      "description": "Machine learning for heterogeneous treatment effects",
+      "advantages": "Captures effect heterogeneity, nonparametric, honest estimation",
+      "limitations": "Requires large samples, complex interpretation",
+      "assumptions": ["Conditional exchangeability", "positivity", "consistency"]
+    }
+  ],
+  "limitations": [
+    "Unmeasured confounding may bias observational estimates",
+    "Model dependence and specification uncertainty",
+    "Limited generalizability beyond study population and context",
+    "Measurement error in variables can bias estimates",
+    "Sample size constraints may limit power for subgroup analyses",
+    "Temporal ordering assumptions may be violated in cross-sectional data",
+    "Spillover effects and interference may violate SUTVA",
+    "Missing data mechanisms may introduce bias if not properly handled",
+    "Multiple testing and false discovery concerns in exploratory analyses",
+    "Computational complexity for advanced methods may limit practical application"
+  ],
+  "ethical_considerations": [
+    "Informed consent and privacy protection for human subjects",
+    "Fair and equitable treatment of all study participants",
+    "Transparent reporting of methods and limitations",
+    "Consideration of potential harms from research findings",
+    "Data security and confidentiality protection",
+    "Appropriate handling of sensitive demographic information",
+    "Consideration of algorithmic fairness in automated analyses",
+    "Responsible communication of uncertainty and limitations",
+    "Avoidance of stigmatization in reporting group differences",
+    "Consideration of policy implications and unintended consequences"
+  ],
+  "quality_assurance": [
+    "Pre-registration of analysis plans when possible",
+    "Independent replication of key analyses",
+    "Sensitivity analyses for key assumptions",
+    "Robustness checks across different methods",
+    "Documentation of all data processing decisions",
+    "Version control for analysis code and data",
+    "Peer review of methods and results",
+    "Validation of findings with external data when available",
+    "Assessment of computational reproducibility",
+    "Regular quality checks for data integrity"
+  ],
+  "created_at": "2025-10-25T00:00:00.000Z",
+  "updated_at": "2025-10-25T00:00:00.000Z",
+  "version": "1.0",
+  "author": "Causal Analysis Workflow Template"
+}

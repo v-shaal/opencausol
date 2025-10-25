@@ -1,0 +1,143 @@
+{
+  "dataset_info": {
+    "path": "path/to/your/dataset.csv",
+    "format": "csv",
+    "encoding": "utf-8",
+    "separator": ",",
+    "header": true,
+    "index_column": null
+  },
+  "variable_roles": {
+    "treatment_variables": [
+      {
+        "name": "treatment_var",
+        "type": "binary",
+        "description": "Primary treatment variable"
+      }
+    ],
+    "outcome_variables": [
+      {
+        "name": "outcome_var",
+        "type": "continuous",
+        "description": "Primary outcome variable"
+      }
+    ],
+    "covariate_variables": [
+      {
+        "name": "age",
+        "type": "continuous",
+        "description": "Age in years"
+      },
+      {
+        "name": "gender",
+        "type": "binary",
+        "description": "Gender (0=male, 1=female)"
+      },
+      {
+        "name": "education",
+        "type": "categorical",
+        "description": "Education level"
+      }
+    ],
+    "instrument_variables": [
+      {
+        "name": "instrument_var",
+        "type": "binary",
+        "description": "Instrumental variable (if applicable)"
+      }
+    ],
+    "mediator_variables": [],
+    "moderator_variables": []
+  },
+  "analysis_settings": {
+    "study_design": "observational",
+    "estimand_type": "ATE",
+    "missing_data_threshold": 0.05,
+    "overlap_threshold": 0.1,
+    "balance_threshold": 0.1,
+    "vif_threshold": 5.0,
+    "outlier_method": "iqr",
+    "outlier_threshold": 1.5
+  },
+  "preprocessing": {
+    "handle_missing": {
+      "method": "multiple_imputation",
+      "mice_method": "pmm",
+      "m_iterations": 5,
+      "complete_case_fallback": true
+    },
+    "variable_transformations": {
+      "log_transform": [],
+      "standardize": [],
+      "create_dummies": [],
+      "bin_continuous": []
+    },
+    "outlier_handling": {
+      "method": "winsorize",
+      "threshold": 1.5,
+      "variables": []
+    }
+  },
+  "propensity_score": {
+    "method": "logistic",
+    "include_interactions": true,
+    "include_polynomials": false,
+    "polynomial_degree": 2,
+    "variable_selection": "all",
+    "cross_validation_folds": 5
+  },
+  "balance_assessment": {
+    "methods": ["smd", "ks_test", "vratio"],
+    "smd_threshold": 0.1,
+    "ks_threshold": 0.1,
+    "plot_love_plot": true,
+    "plot_density_plots": true
+  },
+  "overlap_assessment": {
+    "trim_propensity_scores": false,
+    "trim_lower": 0.01,
+    "trim_upper": 0.99,
+    "plot_propensity_distribution": true,
+    "plot_overlap_histogram": true
+  },
+  "sensitivity_analysis": {
+    "rosenbaum_bounds": true,
+    "e_value": true,
+    "unmeasured_confounding": {
+      "enabled": true,
+      "confounder_strength_range": [0.1, 2.0],
+      "confounder_prevalence_range": [0.1, 0.9]
+    }
+  },
+  "visualization": {
+    "theme": "minimal",
+    "color_palette": "Set2",
+    "figure_size": [10, 6],
+    "dpi": 300,
+    "save_formats": ["png", "pdf"],
+    "interactive_plots": false
+  },
+  "output": {
+    "directory": "eda_results",
+    "create_subdirectories": true,
+    "save_data": true,
+    "save_plots": true,
+    "save_reports": true,
+    "report_format": ["html", "json"],
+    "include_code": true
+  },
+  "quality_checks": {
+    "data_schema_validation": true,
+    "range_validation": true,
+    "duplicate_detection": true,
+    "temporal_ordering_check": true,
+    "missingness_pattern_analysis": true
+  },
+  "advanced_options": {
+    "machine_learning_propensity": false,
+    "ensemble_methods": false,
+    "causal_forest": false,
+    "double_robust": false,
+    "targeted_learning": false
+  }
+}

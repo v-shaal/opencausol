@@ -20,7 +20,14 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onCommand:opencode.openTerminal",
+    "onCommand:opencode.openNewTerminal",
+    "onCommand:opencode.addFilepathToTerminal",
+    "onCommand:opencode.causal.openChat",
+    "onCommand:opencode.causal.start",
+    "onView:opencode.chatView"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
@@ -43,8 +50,25 @@
       {
         "command": "opencode.addFilepathToTerminal",
         "title": "Add Filepath to Terminal"
+      },
+      {
+        "command": "opencode.causal.openChat",
+        "title": "Open Causal Workflow Chat"
+      },
+      {
+        "command": "opencode.causal.start",
+        "title": "Start Causal Workflow Session"
       }
     ],
+    "views": {
+      "explorer": [
+        {
+          "id": "opencode.chatView",
+          "name": "Causal Workflow",
+          "type": "webview"
+        }
+      ]
+    },
     "menus": {
       "editor/title": [
         {
@@ -78,7 +102,18 @@
         "win": "ctrl+alt+K",
         "linux": "ctrl+alt+K"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "OpenCode Causal",
+      "properties": {
+        "opencode.causal.pollIntervalMs": {
+          "type": "number",
+          "default": 1200,
+          "minimum": 250,
+          "description": "Polling interval in milliseconds for causal workflow updates."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "bun run package",

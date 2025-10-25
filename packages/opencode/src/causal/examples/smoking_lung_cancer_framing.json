@@ -1,0 +1,325 @@
+{
+  "research_question": "What is the causal effect of cigarette smoking on the development of lung cancer?",
+  "background": "Cigarette smoking is widely recognized as a major risk factor for lung cancer, but establishing causal inference in observational studies presents significant challenges. Smoking behavior is not randomly assigned and is strongly associated with numerous other risk factors including socioeconomic status, occupational exposures, and health behaviors. This framing addresses the methodological challenges of isolating the causal effect of smoking from confounding factors and selection bias inherent in epidemiological studies.",
+  "variables": [
+    {
+      "name": "smoking_exposure",
+      "type": "categorical",
+      "description": "Cigarette smoking exposure level",
+      "role": "treatment",
+      "measurement": "Pack-years calculated from smoking history questionnaires",
+      "validation": {
+        "required": true,
+        "categories": ["never", "former", "current_light", "current_heavy"]
+      }
+    },
+    {
+      "name": "lung_cancer",
+      "type": "binary",
+      "description": "Diagnosis of primary lung cancer (ICD-10 C34)",
+      "role": "outcome",
+      "measurement": "Medical records, cancer registry, or pathology reports",
+      "validation": {
+        "required": true,
+        "range": [0, 1]
+      }
+    },
+    {
+      "name": "age",
+      "type": "continuous",
+      "description": "Age at study enrollment in years",
+      "role": "covariate",
+      "validation": {
+        "required": true,
+        "range": [18, 100]
+      }
+    },
+    {
+      "name": "gender",
+      "type": "binary",
+      "description": "Biological sex",
+      "role": "covariate",
+      "validation": {
+        "required": true,
+        "range": [0, 1]
+      }
+    },
+    {
+      "name": "socioeconomic_status",
+      "type": "categorical",
+      "description": "Socioeconomic status based on education and income",
+      "role": "covariate",
+      "validation": {
+        "required": true,
+        "categories": ["low", "medium", "high"]
+      }
+    },
+    {
+      "name": "asbestos_exposure",
+      "type": "binary",
+      "description": "History of occupational asbestos exposure",
+      "role": "covariate",
+      "validation": {
+        "required": true,
+        "range": [0, 1]
+      }
+    },
+    {
+      "name": "radon_exposure",
+      "type": "continuous",
+      "description": "Estimated residential radon exposure (Bq/m³)",
+      "role": "covariate",
+      "validation": {
+        "required": false,
+        "range": [0, 1000]
+      }
+    },
+    {
+      "name": "family_history_cancer",
+      "type": "binary",
+      "description": "First-degree relative with lung cancer",
+      "role": "covariate",
+      "validation": {
+        "required": true,
+        "range": [0, 1]
+      }
+    },
+    {
+      "name": "occupational_exposure",
+      "type": "categorical",
+      "description": "Occupational exposure to carcinogens",
+      "role": "covariate",
+      "validation": {
+        "required": true,
+        "categories": ["none", "low", "medium", "high"]
+      }
+    },
+    {
+      "name": "alcohol_consumption",
+      "type": "continuous",
+      "description": "Alcohol consumption in drinks per week",
+      "role": "covariate",
+      "validation": {
+        "required": true,
+        "range": [0, 100]
+      }
+    },
+    {
+      "name": "bmi",
+      "type": "continuous",
+      "description": "Body mass index (kg/m²)",
+      "role": "covariate",
+      "validation": {
+        "required": true,
+        "range": [10, 50]
+      }
+    },
+    {
+      "name": "physical_activity",
+      "type": "categorical",
+      "description": "Physical activity level",
+      "role": "covariate",
+      "validation": {
+        "required": false,
+        "categories": ["sedentary", "light", "moderate", "vigorous"]
+      }
+    },
+    {
+      "name": "genetic_risk_score",
+      "type": "continuous",
+      "description": "Polygenic risk score for lung cancer susceptibility",
+      "role": "covariate",
+      "validation": {
+        "required": false,
+        "range": [0, 10]
+      }
+    },
+    {
+      "name": "smoking_cessation_program",
+      "type": "binary",
+      "description": "Participation in smoking cessation program (potential instrument)",
+      "role": "instrument",
+      "measurement": "Program enrollment records",
+      "validation": {
+        "required": false,
+        "range": [0, 1]
+      }
+    }
+  ],
+  "estimand": {
+    "type": "ATE",
+    "description": "Average treatment effect of smoking on lung cancer risk in the target population",
+    "target_population": "Adults aged 18+ in the general population",
+    "treatment_levels": ["never", "former", "current_light", "current_heavy"],
+    "outcome_scale": "risk_difference",
+    "alternative_estimands": ["RR", "OR", "HR"]
+  },
+  "study_design": {
+    "type": "observational_cohort",
+    "description": "Prospective cohort study with retrospective smoking exposure assessment",
+    "assignment_mechanism": "Natural assignment based on individual smoking behavior",
+    "data_collection_method": "Baseline questionnaire with longitudinal follow-up through medical records",
+    "temporal_structure": "longitudinal",
+    "follow_up_period": "10-20 years",
+    "loss_to_follow_up_handling": "Inverse probability weighting"
+  },
+  "assumptions": [
+    {
+      "name": "Conditional Exchangeability",
+      "description": "Given measured covariates, smoking exposure is independent of potential lung cancer outcomes",
+      "type": "identifiability",
+      "status": "assumed",
+      "test_method": "Balance tests after propensity score adjustment, negative control outcomes",
+      "rationale": "Core assumption for causal inference from observational data"
+    },
+    {
+      "name": "Positivity",
+      "description": "Every individual has non-zero probability of each smoking level given covariates",
+      "type": "identifiability",
+      "status": "testable",
+      "test_method": "Examination of propensity score distributions, overlap plots",
+      "rationale": "Ensures comparable groups for causal estimation"
+    },
+    {
+      "name": "Consistency",
+      "description": "Potential outcome under observed smoking exposure equals observed outcome",
+      "type": "identifiability",
+      "status": "assumed",
+      "test_method": "Sensitivity analysis to different exposure definitions",
+      "rationale": "Links potential outcomes to observed data"
+    },
+    {
+      "name": "No Unmeasured Confounding",
+      "description": "All important confounders are measured and appropriately adjusted for",
+      "type": "identifiability",
+      "status": "assumed",
+      "test_method": "E-value calculation, negative control exposures/outcomes",
+      "rationale": "Critical for unbiased causal estimates"
+    },
+    {
+      "name": "Correct Model Specification",
+      "description": "Statistical models correctly specify relationships between variables",
+      "type": "statistical",
+      "status": "testable",
+      "test_method": "Residual analysis, goodness-of-fit tests, cross-validation",
+      "rationale": "Ensures valid statistical inference"
+    },
+    {
+      "name": "No Selection Bias",
+      "description": "Study selection and loss to follow-up are independent of potential outcomes",
+      "type": "identifiability",
+      "status": "assumed",
+      "test_method": "Compare characteristics of completers vs dropouts, inverse probability weighting",
+      "rationale": "Prevents biased estimates from selective participation"
+    }
+  ],
+  "validation_criteria": [
+    {
+      "name": "Propensity Score Balance",
+      "description": "Covariates should be balanced across smoking groups after adjustment",
+      "threshold": "Standardized mean differences < 0.1",
+      "test": "Love plots before and after adjustment",
+      "required": true
+    },
+    {
+      "name": "Positivity Check",
+      "description": "Sufficient overlap in propensity scores across treatment groups",
+      "threshold": "Minimum propensity score > 0.05 and < 0.95",
+      "test": "Propensity score distribution plots",
+      "required": true
+    },
+    {
+      "name": "Instrument Validity",
+      "description": "If using IV, instrument must satisfy relevance and exclusion restrictions",
+      "threshold": "First-stage F-statistic > 10",
+      "test": "2SLS regression diagnostics",
+      "required": false
+    },
+    {
+      "name": "Negative Control Test",
+      "description": "No effect should be found for outcomes that cannot be caused by smoking",
+      "threshold": "p > 0.05 for negative control outcomes",
+      "test": "Analysis of negative control outcomes",
+      "required": false
+    },
+    {
+      "name": "Sensitivity Analysis",
+      "description": "Estimates should be robust to reasonable unmeasured confounding",
+      "threshold": "E-value > 2.0 for moderate effects",
+      "test": "E-value calculation, Rosenbaum bounds",
+      "required": true
+    },
+    {
+      "name": "Dose-Response Relationship",
+      "description": "Higher smoking exposure should lead to higher lung cancer risk",
+      "threshold": "Monotonic trend test p < 0.05",
+      "test": "Trend analysis across smoking categories",
+      "required": false
+    }
+  ],
+  "data_requirements": {
+    "sample_size": 50000,
+    "time_periods": "baseline + follow-up",
+    "required_variables": [
+      "smoking_exposure",
+      "lung_cancer",
+      "age",
+      "gender",
+      "socioeconomic_status",
+      "asbestos_exposure",
+      "family_history_cancer",
+      "occupational_exposure",
+      "alcohol_consumption",
+      "bmi"
+    ],
+    "optional_variables": ["radon_exposure", "physical_activity", "genetic_risk_score", "smoking_cessation_program"],
+    "data_structure": "Individual-level longitudinal cohort data with baseline exposure assessment and periodic outcome ascertainment",
+    "follow_up_frequency": "Annual or biennial outcome assessment",
+    "outcome_verification": "Pathology confirmation preferred, radiology acceptable"
+  },
+  "analysis_methods": [
+    {
+      "name": "Propensity Score Matching",
+      "description": "Match smokers and non-smokers on propensity scores",
+      "advantages": "Intuitive, creates comparable groups",
+      "limitations": "Discards data, sensitive to model specification"
+    },
+    {
+      "name": "Inverse Probability Weighting",
+      "description": "Weight observations by inverse probability of treatment",
+      "advantages": "Uses full sample, estimates population ATE",
+      "limitations": "Sensitive to extreme weights"
+    },
+    {
+      "name": "Targeted Maximum Likelihood Estimation",
+      "description": "Semiparametric efficient estimation with machine learning",
+      "advantages": "Double robust, flexible",
+      "limitations": "Computationally intensive"
+    },
+    {
+      "name": "Instrumental Variables",
+      "description": "Use smoking cessation programs as instruments",
+      "advantages": "Addresses unmeasured confounding",
+      "limitations": "LATE interpretation, requires valid instrument"
+    }
+  ],
+  "limitations": [
+    "Residual confounding from unmeasured factors (e.g., personality traits, stress)",
+    "Measurement error in smoking exposure assessment (recall bias)",
+    "Long latency period between smoking initiation and lung cancer development",
+    "Healthy smoker survivor bias in cross-sectional studies",
+    "Generalizability limited to populations with similar smoking patterns",
+    "Potential for selection bias due to differential loss to follow-up",
+    "Difficulty separating effects of different tobacco products",
+    "Changes in smoking behavior over time not captured in baseline assessment"
+  ],
+  "ethical_considerations": [
+    "Informed consent for long-term follow-up and genetic testing",
+    "Privacy protection for sensitive health and lifestyle information",
+    "Communication of individual risk findings to participants",
+    "Consideration of stigmatization in reporting smoking-related risks",
+    "Data sharing policies that protect participant confidentiality"
+  ],
+  "created_at": "2025-10-25T00:00:00.000Z",
+  "updated_at": "2025-10-25T00:00:00.000Z"
+}
