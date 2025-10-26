@@ -11,3 +11,5 @@ tmp
 dist
 .turbo
 .claude/
+__pycache__/
+*.egg-info/
