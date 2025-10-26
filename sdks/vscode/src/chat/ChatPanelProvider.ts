@@ -19,19 +19,17 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
   private view: vscode.WebviewView | undefined;
 
   resolveWebviewView(webviewView: vscode.WebviewView) {
-    console.log("[ChatPanelProvider] resolveWebviewView called - creating view");
     this.view = webviewView;
 
-    // Keep the webview alive even when hidden
     webviewView.webview.options = {
       enableScripts: true,
     };
 
-    const webview = webviewView.webview;
-    webview.html = this.getHtml(webview);
-    webview.onDidReceiveMessage((message) => {
+    webviewView.webview.html = this.getHtml(webviewView.webview);
+    webviewView.webview.onDidReceiveMessage((message) => {
       this.handleMessage(message);
     });
+
     const session = this.resolveSession();
     if (session) {
       this.postSession(session);
@@ -42,47 +40,56 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
     if (!session || !this.view) {
       return;
     }
-    console.log(`[ChatPanelProvider] Setting session: ${session.sessionID} @ ${session.port}`);
     this.postSession(session);
   }
 
   reveal() {
-    if (!this.view) {
-      return;
-    }
-    this.view.show?.(true);
+    this.view?.show?.(true);
   }
 
   private postSession(session: SessionBinding) {
-    if (!this.view) {
-      return;
-    }
-    const message = { type: "session", session };
-    this.view.webview.postMessage(message);
+    this.view?.webview.postMessage({ type: "session", session });
   }
 
   private handleMessage(message: unknown) {
-    if (!message || typeof message !== "object") {return;}
+    if (!message || typeof message !== "object") {
+      return;
+    }
     const record = message as Record<string, unknown>;
     const type = typeof record.type === "string" ? record.type : "";
     if (type === "ready") {
       const session = this.resolveSession();
-      if (session) {this.postSession(session);} 
+      if (session) {
+        this.postSession(session);
+      }
       return;
     }
     if (type === "send") {
       const text = typeof record.text === "string" ? record.text.trim() : "";
-      if (!text) {return;}
+      if (!text) {
+        return;
+      }
       this.sendHandler(text).catch((error) => {
         const reason = error instanceof Error ? error.message : String(error);
         void vscode.window.showErrorMessage(`Failed to send message: ${reason}`);
       });
+      return;
+    }
+    if (type === "openNotebook") {
+      const notebookPath = typeof record.notebookPath === "string" ? record.notebookPath : "";
+      if (!notebookPath) {
+        return;
+      }
+      void vscode.commands.executeCommand("opencode.openNotebook", notebookPath);
     }
   }
 
   private getHtml(webview: vscode.Webview) {
     const nonce = this.createNonce();
     const cspSource = webview.cspSource;
+    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, "media", "chat-webview.js"));
+    const defaultPoll = this.resolveSession()?.pollInterval ?? 1200;
+
     const styles = `
       :root {color-scheme: light dark;}
       body {margin: 0; padding: 0; font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); background: var(--vscode-editor-background); color: var(--vscode-foreground); display: flex; flex-direction: column; height: 100vh;}
@@ -91,16 +98,30 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
       header .meta {font-size: 0.8rem; color: var(--vscode-descriptionForeground);}
       main {flex: 1; display: flex; flex-direction: column; overflow: hidden;}
       #messages {flex: 1; padding: 1rem; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem;}
-      .msg {padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid var(--vscode-editorWidget-border); background: var(--vscode-editorWidget-background); white-space: pre-wrap;}
+      .msg {padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid var(--vscode-editorWidget-border); background: var(--vscode-editorWidget-background);}
       .msg.assistant {border-color: var(--vscode-inputValidation-infoBorder);}
       .msg.user {border-color: var(--vscode-inputValidation-warningBorder);}
+      .msg .message-content {white-space: normal; line-height: 1.45;}
+      .msg .message-content h1,
+      .msg .message-content h2,
+      .msg .message-content h3 {margin: 0.5rem 0; font-weight: 600;}
+      .msg .message-content p {margin: 0.45rem 0;}
+      .msg .message-content ul {margin: 0.4rem 0 0.4rem 1.2rem; padding-left: 1.2rem;}
+      .msg .message-content li {margin: 0.2rem 0;}
+      .msg .message-content code {background: var(--vscode-editorWidget-background); padding: 0.1rem 0.3rem; border-radius: 4px; border: 1px solid var(--vscode-editorWidget-border);}
+      .msg .message-content pre {margin: 0.5rem 0; padding: 0.6rem; border-radius: 6px; background: var(--vscode-editorWidget-background); border: 1px solid var(--vscode-editorWidget-border); overflow-x: auto;}
       form {border-top: 1px solid var(--vscode-editorGroup-border); padding: 0.75rem; display: flex; gap: 0.5rem;}
       textarea {flex: 1; resize: none; min-height: 3rem; max-height: 7rem; border-radius: 6px; border: 1px solid var(--vscode-input-border); padding: 0.5rem; background: var(--vscode-input-background); color: var(--vscode-input-foreground); font-family: inherit; font-size: inherit;}
       button {padding: 0.5rem 1rem; border-radius: 6px; border: none; cursor: pointer; background: var(--vscode-button-background); color: var(--vscode-button-foreground);}
       button:hover {background: var(--vscode-button-hoverBackground);}
       #status {font-size: 0.8rem; color: var(--vscode-descriptionForeground);}
+      details.thinking {margin-top: 0.5rem; border: 1px solid var(--vscode-editorWidget-border); border-radius: 6px; background: var(--vscode-editor-background); padding: 0 0.5rem 0.5rem;}
+      details.thinking summary {cursor: pointer; font-weight: 500; margin: 0.25rem 0;}
+      details.thinking pre {margin: 0.25rem 0 0; padding: 0.5rem; border-radius: 4px; background: var(--vscode-editorWidget-background); border: 1px solid var(--vscode-editorWidget-border); white-space: pre-wrap; font-size: 0.85rem;}
+      details.thinking ul {margin: 0.25rem 0 0; padding-left: 1.25rem;}
+      details.thinking li {margin: 0.2rem 0; font-size: 0.85rem;}
     `;
-    const script = this.getScript(nonce);
+
     return `<!DOCTYPE html>
       <html lang="en">
         <head>
@@ -122,138 +143,10 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
             <textarea id="input" rows="3" placeholder="Ask about your causal workflow..."></textarea>
             <button type="submit">Send</button>
           </form>
-          <script nonce="${nonce}">${script}</script>
+          <script nonce="${nonce}">window.__CAUSAL_CHAT_CONFIG__ = { pollInterval: ${defaultPoll} };</script>
+          <script nonce="${nonce}" src="${scriptUri}"></script>
         </body>
       </html>`;
-  }
-
-  private getScript(nonce: string) {
-    const script = `const vscode = acquireVsCodeApi();
-const state = { session: undefined, timer: undefined, messages: [], pollInterval: 1200 };
-const statusNode = document.getElementById('status');
-const messagesNode = document.getElementById('messages');
-const inputNode = document.getElementById('input');
-const formNode = document.getElementById('composer');
-
-const renderStatus = () => {
-  if (!state.session) { statusNode.textContent = 'No session attached'; return; }
-  statusNode.textContent = 'Session ' + state.session.sessionID + ' @ ' + state.session.port + ' · polling ' + state.pollInterval + 'ms';
-};
-
-const renderMessages = (items) => {
-  state.messages = items;
-  messagesNode.innerHTML = '';
-  for (const item of state.messages) {
-    const wrapper = document.createElement('article');
-    wrapper.className = 'msg ' + item.role;
-    const content = [];
-    if (Array.isArray(item.parts)) {
-      for (const part of item.parts) {
-        if (!part || typeof part !== 'object') { continue; }
-        if (part.type === 'text' && typeof part.text === 'string') { content.push(part.text); }
-        if (part.type === 'tool' && typeof part.name === 'string') { content.push('[tool] ' + part.name); }
-      }
-    }
-    wrapper.textContent = content.length ? content.join('\\n\\n') : '[no content]';
-    messagesNode.appendChild(wrapper);
-  }
-  messagesNode.scrollTop = messagesNode.scrollHeight;
-};
-
-const fetchJson = (url) => fetch(url).then((res) => {
-  if (!res.ok) { return undefined; }
-  return res.json();
-}).catch(() => undefined);
-
-const poll = async () => {
-  if (!state.session) { return; }
-  const base = 'http://localhost:' + state.session.port;
-  const sessionUrl = base + '/session/' + state.session.sessionID;
-  const messagesUrl = sessionUrl + '/message';
-  console.log('[Webview] Polling:', messagesUrl);
-  const [info, msgs] = await Promise.all([fetchJson(sessionUrl), fetchJson(messagesUrl)]);
-  if (info && typeof info === 'object') {
-    renderStatus();
-  }
-  if (Array.isArray(msgs)) {
-    console.log('[Webview] Received messages:', msgs.length);
-    renderMessages(msgs);
-  } else {
-    console.log('[Webview] No messages or invalid response:', msgs);
-  }
-};
-
-const schedulePoll = () => {
-  if (!state.session) { return; }
-  if (typeof state.timer === 'number') { window.clearTimeout(state.timer); }
-  const run = async () => {
-    await poll();
-    if (!state.session) { return; }
-    state.timer = window.setTimeout(run, state.pollInterval);
-  };
-  void run();
-};
-
-const setSession = (payload) => {
-  console.log('[Webview] setSession called with:', payload);
-  state.session = payload.session;
-  state.pollInterval = typeof payload.session?.pollInterval === 'number' ? payload.session.pollInterval : 1200;
-  console.log('[Webview] Session set:', state.session);
-  renderStatus();
-  schedulePoll();
-};
-
-window.addEventListener('message', (event) => {
-  console.log('[Webview] Received message:', event.data);
-  const data = event.data;
-  if (!data || typeof data !== 'object') {
-    console.log('[Webview] Message data is not an object');
-    return;
-  }
-  if (data.type === 'session') {
-    console.log('[Webview] Processing session message');
-    setSession(data);
-  } else {
-    console.log('[Webview] Unknown message type:', data.type);
-  }
-});
-
-formNode.addEventListener('submit', (event) => {
-  event.preventDefault();
-  if (!inputNode) { return; }
-  const value = inputNode.value.trim();
-  if (!value) { return; }
-  console.log('[Webview] Sending message:', value);
-  vscode.postMessage({ type: 'send', text: value });
-  inputNode.value = '';
-
-  // Optimistic UI update - show user message immediately
-  const userMessage = {
-    role: 'user',
-    parts: [{ type: 'text', text: value }]
-  };
-  state.messages.push(userMessage);
-  renderMessages(state.messages);
-  console.log('[Webview] Message added optimistically');
-});
-
-console.log('[Webview] Initializing, sending ready message');
-console.log('[Webview] DOM elements:', {
-  statusNode: !!statusNode,
-  messagesNode: !!messagesNode,
-  inputNode: !!inputNode,
-  formNode: !!formNode
-});
-vscode.postMessage({ type: 'ready' });
-console.log('[Webview] Ready message sent, initial state:', state);
-
-// Debug: Log to verify script is running
-document.addEventListener('DOMContentLoaded', () => {
-  console.log('[Webview] DOMContentLoaded event fired');
-});
-console.log('[Webview] Script execution completed');
-`;
-    return script;
   }
 
   private createNonce() {

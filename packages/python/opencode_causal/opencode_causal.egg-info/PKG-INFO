@@ -1,0 +1,118 @@
+Metadata-Version: 2.4
+Name: opencode-causal
+Version: 0.1.0
+Summary: Causal inference MCP servers for OpenCode
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: jupyter-client>=8.6.0
+Requires-Dist: ipykernel>=6.29.0
+Requires-Dist: mcp>=0.9.0
+Requires-Dist: networkx>=3.2
+Requires-Dist: pgmpy>=0.1.25
+Requires-Dist: pydot>=2.0.0
+Requires-Dist: langchain>=0.1.0
+Requires-Dist: faiss-cpu>=1.7.4
+Requires-Dist: sentence-transformers>=2.2.0
+Requires-Dist: anthropic>=0.18.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.4.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.21.0; extra == "dev"
+Requires-Dist: black>=23.0.0; extra == "dev"
+Requires-Dist: ruff>=0.1.0; extra == "dev"
+
+# OpenCode Causal - MCP Servers
+
+Python MCP servers for causal inference workflows in OpenCode.
+
+## Installation
+
+```bash
+cd packages/python/opencode_causal
+pip install -e .
+```
+
+For development:
+```bash
+pip install -e ".[dev]"
+```
+
+## MCP Servers
+
+### 1. Jupyter Runner
+
+Manages Jupyter kernel lifecycle and code execution for causal inference analysis.
+
+**Run as MCP server:**
+```bash
+python -m opencode_causal.jupyter_runner
+```
+
+**Tools provided:**
+- `kernel_ensure` - Start/reuse Jupyter kernel
+- `cell_run` - Execute Python code and capture outputs
+- `get_variable` - Retrieve variable values from kernel
+- `artifact_store` - Save artifacts to session directory
+
+**Configuration in `opencode.json`:**
+```json
+{
+  "mcp": {
+    "jupyter-runner": {
+      "type": "local",
+      "command": ["python", "-m", "opencode_causal.jupyter_runner"],
+      "enabled": true
+    }
+  }
+}
+```
+
+### 2. Graph Math (Coming Soon)
+
+DAG operations using NetworkX and pgmpy for causal graph analysis.
+
+### 3. Causal Docs (Coming Soon)
+
+RAG-based knowledge base for causal inference best practices.
+
+## Development
+
+Run tests:
+```bash
+pytest
+```
+
+Format code:
+```bash
+black .
+ruff check --fix .
+```
+
+## Usage Example
+
+From OpenCode agents, use the MCP tools:
+
+```typescript
+// In causal-eda agent
+const result = await useMCPTool("jupyter-runner", "cell_run", {
+  code: `
+import pandas as pd
+df = pd.read_csv('data.csv')
+print(df.describe())
+  `,
+  timeout: 60
+});
+```
+
+## Architecture
+
+```
+opencode_causal/
+├── __init__.py
+├── jupyter_runner/
+│   ├── __init__.py
+│   ├── server.py          # MCP server implementation
+│   ├── kernel.py          # Jupyter kernel manager
+│   └── __main__.py        # Entry point
+├── graph_math/            # Coming soon
+└── causal_docs/           # Coming soon
+```

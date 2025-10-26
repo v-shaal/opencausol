@@ -1,16 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
-    "causal-docs": {
-      "type": "remote",
-      "url": "http://localhost:8801",
-      "enabled": true
-    },
-    "graph-math": {
-      "type": "remote",
-      "url": "http://localhost:8802",
-      "enabled": true
-    },
     "jupyter-runner": {
       "type": "local",
       "command": [
@@ -20,6 +10,16 @@
       ],
       "enabled": true
     },
+    "causal-docs": {
+      "type": "remote",
+      "url": "http://localhost:8801",
+      "enabled": false
+    },
+    "graph-math": {
+      "type": "remote",
+      "url": "http://localhost:8802",
+      "enabled": false
+    },
     "causal-sdk": {
       "type": "local",
       "command": [
@@ -27,7 +27,7 @@
         "-m",
         "opencode_causal.causal_sdk"
       ],
-      "enabled": true
+      "enabled": false
     }
   }
 }

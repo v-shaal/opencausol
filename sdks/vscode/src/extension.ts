@@ -1,3 +1,4 @@
+import * as path from "path";
 import * as vscode from "vscode";
 
 import { ChatPanelProvider, type SessionBinding } from "./chat/ChatPanelProvider";
@@ -161,6 +162,33 @@ export function activate(context: vscode.ExtensionContext) {
     console.log("[opencode] Workflow start complete");
   });
 
+  // Register Jupyter notebook commands
+  const openNotebookDisposable = vscode.commands.registerCommand(
+    "opencode.openNotebook",
+    async (notebookPath: string) => {
+      const trimmed = typeof notebookPath === "string" ? notebookPath.trim() : "";
+      if (!trimmed) {
+        void vscode.window.showErrorMessage("Notebook path missing from causal workflow response.");
+        return;
+      }
+
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      let resolved = trimmed;
+      if (workspaceFolder && !path.isAbsolute(trimmed)) {
+        resolved = path.join(workspaceFolder.uri.fsPath, trimmed);
+      }
+
+      const notebookUri = vscode.Uri.file(resolved);
+      try {
+        const document = await vscode.workspace.openNotebookDocument(notebookUri);
+        await vscode.window.showNotebookDocument(document, { preview: false });
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        void vscode.window.showErrorMessage(`Failed to open notebook: ${reason}`);
+      }
+    },
+  );
+
   if (state.session) {chatProvider.setSession(state.session);}
 
   context.subscriptions.push(
@@ -169,6 +197,7 @@ export function activate(context: vscode.ExtensionContext) {
     addFilepathDisposable,
     openChatDisposable,
     startWorkflowDisposable,
+    openNotebookDisposable,
     chatDisposable,
   );
 
@@ -340,7 +369,7 @@ export function activate(context: vscode.ExtensionContext) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         agent: "causal-supervisor",
-        parts: [{ type: "text", text: "Initialize causal workflow (framing → EDA → DAG → ID)." }],
+        parts: [{ type: "text", text: "How can I help you today?" }],
       }),
     });
 
