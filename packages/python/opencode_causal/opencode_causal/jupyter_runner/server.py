@@ -3,6 +3,8 @@
 import asyncio
 import json
 import logging
+import re
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -15,17 +17,61 @@ from .kernel import KernelManager
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Global kernel manager instance
-kernel_manager: KernelManager | None = None
+# Global kernel manager registry keyed by run directory
+kernel_managers: dict[str, KernelManager] = {}
+current_manager_key: str | None = None
 
 
-def get_kernel_manager(session_dir: str | None = None) -> KernelManager:
-    """Get or create the kernel manager instance."""
-    global kernel_manager
-    if kernel_manager is None:
-        session_path = Path(session_dir) if session_dir else None
-        kernel_manager = KernelManager(session_path)
-    return kernel_manager
+def slugify(value: str) -> str:
+    cleaned = re.sub(r"[^a-z0-9]+", "-", value.lower())
+    return cleaned.strip("-")
+
+
+def create_run_directory(analysis_name: str | None) -> Path:
+    date_part = datetime.now().strftime("%Y%m%d")
+    slug = slugify(analysis_name or "")
+    if not slug:
+        slug = "causal-analysis"
+
+    base_dir = Path.cwd() / ".opencode" / "runs" / date_part
+    base_dir.mkdir(parents=True, exist_ok=True)
+
+    candidate = base_dir / slug
+    suffix = 1
+    while str(candidate.resolve()) in kernel_managers or candidate.exists():
+        candidate = base_dir / f"{slug}-{suffix}"
+        suffix += 1
+
+    candidate.mkdir(parents=True, exist_ok=True)
+    return candidate
+
+
+def resolve_manager(session_dir: str | None, analysis_name: str | None, create: bool) -> KernelManager:
+    global kernel_managers, current_manager_key
+
+    if session_dir:
+        run_dir = Path(session_dir).expanduser().resolve()
+    elif current_manager_key and current_manager_key in kernel_managers:
+        run_dir = Path(current_manager_key)
+    elif create:
+        run_dir = create_run_directory(analysis_name)
+    else:
+        run_dir = Path.cwd() / ".opencode" / "jupyter"
+        run_dir.mkdir(parents=True, exist_ok=True)
+
+    key = str(run_dir)
+
+    if key not in kernel_managers and create:
+        kernel_managers[key] = KernelManager(run_dir)
+
+    if key not in kernel_managers:
+        # Fall back to existing manager if available
+        if current_manager_key and current_manager_key in kernel_managers:
+            return kernel_managers[current_manager_key]
+        kernel_managers[key] = KernelManager(run_dir)
+
+    current_manager_key = key
+    return kernel_managers[key]
 
 
 def create_server() -> Server:
@@ -50,6 +96,14 @@ def create_server() -> Server:
                             "type": "string",
                             "description": "Session directory for artifacts (optional)",
                         },
+                        "analysis_name": {
+                            "type": "string",
+                            "description": "Short slug for the analysis (used for folder naming)",
+                        },
+                        "stage": {
+                            "type": "string",
+                            "description": "Stage identifier to pre-create the notebook (e.g., 'eda', 'estimation')",
+                        },
                     },
                 },
             ),
@@ -73,6 +127,19 @@ def create_server() -> Server:
                             "description": "If true, don't store in kernel history (default: false)",
                             "default": False,
                         },
+                        "session_dir": {
+                            "type": "string",
+                            "description": "Session directory previously passed to kernel_ensure",
+                        },
+                        "analysis_name": {
+                            "type": "string",
+                            "description": "Short slug for the analysis (used if a session directory was not provided)",
+                        },
+                        "stage": {
+                            "type": "string",
+                            "description": "Stage identifier (e.g., 'eda', 'dag', 'estimation')",
+                            "default": "analysis",
+                        },
                     },
                     "required": ["code"],
                 },
@@ -86,6 +153,14 @@ def create_server() -> Server:
                         "name": {
                             "type": "string",
                             "description": "Variable name to retrieve",
+                        },
+                        "session_dir": {
+                            "type": "string",
+                            "description": "Session directory previously passed to kernel_ensure",
+                        },
+                        "analysis_name": {
+                            "type": "string",
+                            "description": "Short slug for the analysis (used if a session directory was not provided)",
                         },
                     },
                     "required": ["name"],
@@ -111,6 +186,19 @@ def create_server() -> Server:
                             "description": "Storage format (default: json)",
                             "default": "json",
                         },
+                        "session_dir": {
+                            "type": "string",
+                            "description": "Session directory previously passed to kernel_ensure",
+                        },
+                        "analysis_name": {
+                            "type": "string",
+                            "description": "Short slug for the analysis (used if a session directory was not provided)",
+                        },
+                        "stage": {
+                            "type": "string",
+                            "description": "Stage that produced the artifact (e.g., 'eda', 'estimation')",
+                            "default": "analysis",
+                        },
                     },
                     "required": ["name", "data"],
                 },
@@ -124,8 +212,12 @@ def create_server() -> Server:
             if name == "kernel_ensure":
                 python_version = arguments.get("python_version")
                 session_dir = arguments.get("session_dir")
-                km = get_kernel_manager(session_dir)
-                result = km.ensure_kernel(python_version)
+                analysis_name = arguments.get("analysis_name")
+                stage = arguments.get("stage")
+
+                km = resolve_manager(session_dir, analysis_name, create=True)
+                result = km.ensure_kernel(python_version, stage=stage)
+                result["run_directory"] = str(km.run_dir)
                 return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
             elif name == "cell_run":
@@ -133,13 +225,19 @@ def create_server() -> Server:
                 timeout = arguments.get("timeout", 60)
                 silent = arguments.get("silent", False)
 
-                km = get_kernel_manager()
-                result = km.execute_code(code, timeout=timeout, silent=silent)
+                session_dir = arguments.get("session_dir")
+                analysis_name = arguments.get("analysis_name")
+                stage = arguments.get("stage")
+
+                km = resolve_manager(session_dir, analysis_name, create=True)
+                result = km.execute_code(code, timeout=timeout, silent=silent, stage=stage)
                 return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
             elif name == "get_variable":
                 var_name = arguments["name"]
-                km = get_kernel_manager()
+                session_dir = arguments.get("session_dir")
+                analysis_name = arguments.get("analysis_name")
+                km = resolve_manager(session_dir, analysis_name, create=False)
                 result = km.get_variable(var_name)
                 return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
@@ -148,8 +246,12 @@ def create_server() -> Server:
                 data = arguments["data"]
                 format = arguments.get("format", "json")
 
-                km = get_kernel_manager()
-                result = km.store_artifact(artifact_name, data, format)
+                session_dir = arguments.get("session_dir")
+                analysis_name = arguments.get("analysis_name")
+                stage = arguments.get("stage")
+
+                km = resolve_manager(session_dir, analysis_name, create=True)
+                result = km.store_artifact(artifact_name, data, format, stage=stage)
                 return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
             else:

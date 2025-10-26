@@ -7,6 +7,8 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
+from collections import defaultdict
+
 from jupyter_client import KernelManager as JupyterKernelManager
 from jupyter_client.kernelspec import KernelSpecManager
 
@@ -16,24 +18,44 @@ logger = logging.getLogger(__name__)
 class KernelManager:
     """Manages Jupyter kernel lifecycle and code execution."""
 
-    def __init__(self, session_dir: Optional[Path] = None):
-        """
-        Initialize kernel manager.
+    def __init__(self, run_dir: Path):
+        """Initialize kernel manager for a specific run directory."""
 
-        Args:
-            session_dir: Directory for storing session artifacts
-        """
-        self.session_dir = session_dir or Path.cwd() / ".opencode" / "jupyter"
-        self.session_dir.mkdir(parents=True, exist_ok=True)
+        self.run_dir = run_dir
+        self.run_dir.mkdir(parents=True, exist_ok=True)
+
         self.kernel_manager: Optional[JupyterKernelManager] = None
         self.kernel_client = None
-        self._execution_count = 0
 
-        # Notebook file management
-        self.notebook_path = self.session_dir / "analysis.ipynb"
-        self.notebook_data = self._load_or_create_notebook()
+        # Stage-specific notebook tracking
+        self.default_stage = "analysis"
+        self.stage_notebooks: dict[str, dict[str, Any]] = {}
+        self.stage_paths: dict[str, Path] = {}
+        self.stage_exec_counts: dict[str, int] = defaultdict(int)
+        self._ensure_stage(self.default_stage)
 
-    def ensure_kernel(self, python_version: Optional[str] = None) -> dict[str, Any]:
+    def _normalize_stage(self, stage: Optional[str]) -> str:
+        if not stage:
+            return self.default_stage
+        cleaned = stage.strip().lower().replace(" ", "_")
+        return cleaned or self.default_stage
+
+    def _stage_directory(self, stage_key: str) -> Path:
+        stage_dir = self.run_dir / stage_key
+        stage_dir.mkdir(parents=True, exist_ok=True)
+        return stage_dir
+
+    def _ensure_stage(self, stage: Optional[str]) -> str:
+        stage_key = self._normalize_stage(stage)
+        if stage_key not in self.stage_notebooks:
+            notebook_path = self._stage_directory(stage_key) / f"{stage_key}.ipynb"
+            notebook = self._load_or_create_notebook(notebook_path)
+            self.stage_notebooks[stage_key] = notebook
+            self.stage_paths[stage_key] = notebook_path
+            self.stage_exec_counts.setdefault(stage_key, 0)
+        return stage_key
+
+    def ensure_kernel(self, python_version: Optional[str] = None, stage: Optional[str] = None) -> dict[str, Any]:
         """
         Ensure a Jupyter kernel is running.
 
@@ -45,10 +67,12 @@ class KernelManager:
         """
         if self.kernel_manager and self.kernel_manager.is_alive():
             logger.info("Reusing existing kernel")
+            stage_key = self._ensure_stage(stage)
             return {
                 "status": "reused",
                 "kernel_id": self.kernel_manager.kernel_id,
-                "notebook_path": self.get_notebook_path(),
+                "notebook_path": self.get_notebook_path(stage_key),
+                "stage": stage_key,
             }
 
         # Get kernel spec
@@ -73,14 +97,20 @@ class KernelManager:
         self.kernel_client.wait_for_ready(timeout=30)
 
         logger.info(f"Kernel started: {self.kernel_manager.kernel_id}")
+        stage_key = self._ensure_stage(stage)
         return {
             "status": "started",
             "kernel_id": self.kernel_manager.kernel_id,
-            "notebook_path": self.get_notebook_path(),
+            "notebook_path": self.get_notebook_path(stage_key),
+            "stage": stage_key,
         }
 
     def execute_code(
-        self, code: str, timeout: int = 60, silent: bool = False
+        self,
+        code: str,
+        timeout: int = 60,
+        silent: bool = False,
+        stage: Optional[str] = None,
     ) -> dict[str, Any]:
         """
         Execute code in the kernel.
@@ -104,7 +134,8 @@ class KernelManager:
             raise RuntimeError("No kernel running. Call ensure_kernel() first.")
 
         start_time = time.time()
-        self._execution_count += 1
+        stage_key = self._ensure_stage(stage)
+        self.stage_exec_counts[stage_key] += 1
 
         # Execute code
         msg_id = self.kernel_client.execute(code, silent=silent)
@@ -161,15 +192,16 @@ class KernelManager:
         duration_ms = (time.time() - start_time) * 1000
 
         # Add cell to notebook
-        cell_index = self._add_cell_to_notebook(code, outputs, self._execution_count)
+        cell_index = self._add_cell_to_notebook(stage_key, code, outputs, self.stage_exec_counts[stage_key])
 
         return {
             "status": status,
-            "execution_count": self._execution_count,
+            "execution_count": self.stage_exec_counts[stage_key],
             "outputs": outputs,
             "error": error_info,
             "duration_ms": duration_ms,
-            "notebook_path": self.get_notebook_path(),
+            "notebook_path": self.get_notebook_path(stage_key),
+            "stage": stage_key,
             "cell_index": cell_index,
         }
 
@@ -236,7 +268,13 @@ except NameError:
 
         return {"name": name, "exists": False, "type": None, "value": None}
 
-    def store_artifact(self, name: str, data: Any, format: str = "json") -> dict[str, str]:
+    def store_artifact(
+        self,
+        name: str,
+        data: Any,
+        format: str = "json",
+        stage: Optional[str] = None,
+    ) -> dict[str, str]:
         """
         Store an artifact to the session directory.
 
@@ -248,8 +286,9 @@ except NameError:
         Returns:
             dict with file info: {"path": str, "size_bytes": int}
         """
-        artifacts_dir = self.session_dir / "artifacts"
-        artifacts_dir.mkdir(exist_ok=True)
+        stage_key = self._normalize_stage(stage)
+        artifacts_dir = self.run_dir / "artifacts" / stage_key
+        artifacts_dir.mkdir(parents=True, exist_ok=True)
 
         # Determine file extension and write mode
         if format == "json":
@@ -270,43 +309,49 @@ except NameError:
         size_bytes = filepath.stat().st_size
         logger.info(f"Stored artifact: {filepath} ({size_bytes} bytes)")
 
-        return {"path": str(filepath), "size_bytes": size_bytes}
+        return {"path": str(filepath), "size_bytes": size_bytes, "stage": stage_key}
 
-    def _load_or_create_notebook(self) -> dict[str, Any]:
-        """Load existing notebook or create a new one."""
-        if self.notebook_path.exists():
-            with open(self.notebook_path, "r") as f:
+    def _load_or_create_notebook(self, notebook_path: Path) -> dict[str, Any]:
+        """Load existing notebook or create a new one for the given path."""
+        if notebook_path.exists():
+            with open(notebook_path, "r") as f:
                 return json.load(f)
-        else:
-            # Create new notebook structure
-            notebook = {
-                "cells": [],
-                "metadata": {
-                    "kernelspec": {
-                        "display_name": "Python 3",
-                        "language": "python",
-                        "name": "python3",
-                    },
-                    "language_info": {
-                        "name": "python",
-                        "version": "3.10.0",
-                    },
-                },
-                "nbformat": 4,
-                "nbformat_minor": 5,
-            }
-            self._save_notebook(notebook)
-            return notebook
 
-    def _save_notebook(self, notebook_data: Optional[dict[str, Any]] = None):
-        """Save notebook to file."""
-        data = notebook_data or self.notebook_data
-        with open(self.notebook_path, "w") as f:
+        notebook = {
+            "cells": [],
+            "metadata": {
+                "kernelspec": {
+                    "display_name": "Python 3",
+                    "language": "python",
+                    "name": "python3",
+                },
+                "language_info": {
+                    "name": "python",
+                    "version": "3.10.0",
+                },
+            },
+            "nbformat": 4,
+            "nbformat_minor": 5,
+        }
+        with open(notebook_path, "w") as f:
+            json.dump(notebook, f, indent=2)
+        logger.info(f"Created notebook: {notebook_path}")
+        return notebook
+
+    def _save_notebook(self, stage_key: str, notebook_data: Optional[dict[str, Any]] = None):
+        """Save notebook data for a specific stage."""
+        data = notebook_data or self.stage_notebooks[stage_key]
+        path = self.stage_paths[stage_key]
+        with open(path, "w") as f:
             json.dump(data, f, indent=2)
-        logger.info(f"Saved notebook: {self.notebook_path}")
+        logger.info(f"Saved notebook: {path}")
 
     def _add_cell_to_notebook(
-        self, code: str, outputs: list[dict], execution_count: int
+        self,
+        stage_key: str,
+        code: str,
+        outputs: list[dict],
+        execution_count: int,
     ) -> int:
         """
         Add a code cell to the notebook with outputs.
@@ -353,14 +398,16 @@ except NameError:
         }
 
         # Add to notebook
-        self.notebook_data["cells"].append(cell)
-        self._save_notebook()
+        notebook = self.stage_notebooks[stage_key]
+        notebook["cells"].append(cell)
+        self._save_notebook(stage_key, notebook)
 
-        return len(self.notebook_data["cells"]) - 1
+        return len(notebook["cells"]) - 1
 
-    def get_notebook_path(self) -> str:
-        """Get the absolute path to the notebook file."""
-        return str(self.notebook_path.absolute())
+    def get_notebook_path(self, stage: Optional[str] = None) -> str:
+        """Get the absolute path to the notebook file for the specified stage."""
+        stage_key = self._ensure_stage(stage)
+        return str(self.stage_paths[stage_key].absolute())
 
     def shutdown(self):
         """Shutdown the kernel."""

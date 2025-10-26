@@ -17,8 +17,8 @@ Tasks:
 - Propose or refine a DAG given treatment, outcome, and candidate covariates.
 - Validate d‑separation queries and flag colliders/mediators.
 - Compute minimal sufficient adjustment sets and document assumptions.
+- Use the Jupyter tools with `session_dir`, the shared `analysis_name` slug, and `stage: "dag"` so DAG code and artifacts are isolated under the run folder.
 
 Outputs:
 - dag.json and/or dag.dot; dag-sets.json with minimal adjustment sets.
 - A brief rationale for the final DAG and any contested edges.
-

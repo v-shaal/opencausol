@@ -16,8 +16,8 @@ Tasks:
 - Given DAG and estimand, determine if effect is identifiable (backdoor, front‑door, IV, or do‑calculus).
 - Select minimal valid adjustment set; evaluate candidate instruments (relevance/exclusion heuristics).
 - Record assumptions explicitly and propose alternatives if not identifiable.
+- Route all Jupyter tool calls through the shared `session_dir` with the analysis slug and set `stage: "identification"` so notebooks and artifacts are easy to trace.
 
 Outputs:
 - id.json detailing strategy, adjustment set, and assumptions.
 - Validation status and gates for proceeding to estimation.
-

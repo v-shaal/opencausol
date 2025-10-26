@@ -88,6 +88,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
     const nonce = this.createNonce();
     const cspSource = webview.cspSource;
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, "media", "chat-webview.js"));
+    const cacheBuster = Date.now();
     const defaultPoll = this.resolveSession()?.pollInterval ?? 1200;
 
     const styles = `
@@ -110,6 +111,11 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
       .msg .message-content li {margin: 0.2rem 0;}
       .msg .message-content code {background: var(--vscode-editorWidget-background); padding: 0.1rem 0.3rem; border-radius: 4px; border: 1px solid var(--vscode-editorWidget-border);}
       .msg .message-content pre {margin: 0.5rem 0; padding: 0.6rem; border-radius: 6px; background: var(--vscode-editorWidget-background); border: 1px solid var(--vscode-editorWidget-border); overflow-x: auto;}
+      .tool-list {max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem; padding: 0.25rem 0;}
+      .tool-entry {border: 1px solid var(--vscode-editorWidget-border); border-radius: 6px; padding: 0.5rem; background: var(--vscode-editor-background);}
+      .tool-entry .tool-header {font-weight: 600; margin-bottom: 0.25rem;}
+      .tool-entry .tool-title {font-size: 0.9rem; color: var(--vscode-descriptionForeground); margin-bottom: 0.25rem;}
+      .tool-entry .tool-output {font-size: 0.9rem;}
       form {border-top: 1px solid var(--vscode-editorGroup-border); padding: 0.75rem; display: flex; gap: 0.5rem;}
       textarea {flex: 1; resize: none; min-height: 3rem; max-height: 7rem; border-radius: 6px; border: 1px solid var(--vscode-input-border); padding: 0.5rem; background: var(--vscode-input-background); color: var(--vscode-input-foreground); font-family: inherit; font-size: inherit;}
       button {padding: 0.5rem 1rem; border-radius: 6px; border: none; cursor: pointer; background: var(--vscode-button-background); color: var(--vscode-button-foreground);}
@@ -144,7 +150,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
             <button type="submit">Send</button>
           </form>
           <script nonce="${nonce}">window.__CAUSAL_CHAT_CONFIG__ = { pollInterval: ${defaultPoll} };</script>
-          <script nonce="${nonce}" src="${scriptUri}"></script>
+          <script nonce="${nonce}" src="${scriptUri}?v=${cacheBuster}"></script>
         </body>
       </html>`;
   }

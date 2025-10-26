@@ -1,4 +1,15 @@
 (function () {
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((regs) => {
+    for (const reg of regs) {
+      const url = reg && reg.active ? reg.active.scriptURL : '';
+      if (!url || !url.includes('service-worker.js')) {
+        reg.unregister().catch(() => {});
+      }
+    }
+  }).catch(() => {});
+}
+
   const vscode = acquireVsCodeApi();
   const config = window.__CAUSAL_CHAT_CONFIG__ || {};
   delete window.__CAUSAL_CHAT_CONFIG__;
@@ -124,11 +135,30 @@
     return html || "<p></p>";
   };
 
-  const renderToolSnippet = (value) => {
-    if (!value) { return ""; }
-    const trimmed = String(value).trim();
-    const limited = trimmed.length > 160 ? `${trimmed.slice(0, 160)}…` : trimmed;
-    return renderInline(limited);
+  const renderToolDetails = (entry) => {
+    const container = document.createElement("div");
+    container.className = "tool-entry";
+    const header = document.createElement("div");
+    header.className = "tool-header";
+    const statusLabel = entry.status ? ` (${entry.status})` : "";
+    header.innerHTML = `${renderInline(entry.tool)}${statusLabel}`;
+    container.appendChild(header);
+
+    if (entry.title) {
+      const title = document.createElement("div");
+      title.className = "tool-title";
+      title.innerHTML = renderInline(entry.title);
+      container.appendChild(title);
+    }
+
+    if (entry.output) {
+      const outputBlock = document.createElement("div");
+      outputBlock.className = "tool-output";
+      const snippet = renderMarkdown(entry.output);
+      outputBlock.innerHTML = snippet;
+      container.appendChild(outputBlock);
+    }
+    return container;
   };
 
   const renderStatus = () => {
@@ -230,8 +260,24 @@
               thoughts.push(part.text.trim());
             }
           }
-          if (part.type === "reasoning" && typeof part.text === "string" && part.text.trim()) {
-            thoughts.push(part.text.trim());
+          if (part.type === "reasoning") {
+            const raw = typeof part.text === 'string' ? part.text.trim() : '';
+            let chosen = raw;
+            if (!chosen || /^[0w\s]+$/.test(chosen)) {
+              const meta = part.metadata || {};
+              const summary = typeof meta.summary === 'string' ? meta.summary :
+                typeof meta.reasoningSummary === 'string' ? meta.reasoningSummary :
+                typeof meta.reasoning_summary === 'string' ? meta.reasoning_summary :
+                Array.isArray(meta.summary) ? meta.summary.join(' ') : '';
+              if (summary && typeof summary === 'string') {
+                chosen = summary.trim();
+              } else {
+                chosen = '';
+              }
+            }
+            if (chosen) {
+              thoughts.push(chosen);
+            }
           }
           if (part.type === "tool") {
             const toolLabel = typeof part.tool === "string" ? part.tool : (typeof part.name === "string" ? part.name : "tool");
@@ -273,42 +319,38 @@
           details.open = next;
           sectionState.reasoning = next;
         });
-        wrapper.appendChild(details);
-      }
+      wrapper.appendChild(details);
+    }
 
       if (toolStates.length) {
-        const details = document.createElement("details");
-        details.className = "thinking";
-        details.open = !!sectionState.tools;
-        const summary = document.createElement("summary");
-        summary.textContent = "Tool activity";
-        details.appendChild(summary);
-        const list = document.createElement("ul");
-        toolStates.forEach((entry) => {
-          const itemNode = document.createElement("li");
-          const statusLabel = entry.status ? ` (${entry.status})` : "";
-          const titleLabel = entry.title ? `: ${renderInline(entry.title)}` : "";
-          const snippet = entry.output ? ` → ${renderToolSnippet(entry.output)}` : "";
-          itemNode.innerHTML = `${renderInline(entry.tool)}${statusLabel}${titleLabel}${snippet}`;
-          list.appendChild(itemNode);
-        });
-        details.appendChild(list);
-        summary.addEventListener("click", (event) => {
+      const details = document.createElement("details");
+      details.className = "thinking";
+      details.open = !!sectionState.tools;
+      const summary = document.createElement("summary");
+      summary.textContent = "Tool activity";
+      details.appendChild(summary);
+      const container = document.createElement("div");
+      container.className = "tool-list";
+      toolStates.forEach((entry) => {
+        container.appendChild(renderToolDetails(entry));
+      });
+      details.appendChild(container);
+      summary.addEventListener("click", (event) => {
           event.preventDefault();
           event.stopPropagation();
           const next = !details.open;
           details.open = next;
           sectionState.tools = next;
         });
-        wrapper.appendChild(details);
-      }
+      wrapper.appendChild(details);
+    }
 
       if (notebookPath) {
         const notebookButton = document.createElement("div");
         notebookButton.style.marginTop = "8px";
         notebookButton.style.paddingTop = "8px";
         notebookButton.style.borderTop = "1px solid var(--vscode-editorGroup-border)";
-        notebookButton.innerHTML = `<button style="font-size: 0.9em; padding: 4px 8px;" onclick="openNotebook('${notebookPath}')">📓 Open Notebook</button>`;
+        notebookButton.innerHTML = `<button style="font-size: 0.9em; padding: 4px 8px;" onclick='openNotebook(${JSON.stringify(notebookPath)})'>📓 Open Notebook</button>`;
         wrapper.appendChild(notebookButton);
         if (!state.openedNotebooks.has(notebookPath)) {
           state.openedNotebooks.add(notebookPath);

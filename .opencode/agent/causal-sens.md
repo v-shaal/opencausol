@@ -16,8 +16,8 @@ Tasks:
 - Compute E‑values, Rosenbaum bounds, and Partial R2/U.
 - For IV: weak instrument and over‑identification tests (Stock–Yogo, Sargan/Hansen).
 - Propose placebo and negative control checks when applicable.
+- Use the shared `session_dir` and analysis slug with `stage: "sensitivity"` for all notebook code and stored artifacts.
 
 Outputs:
 - sensitivity.json with robustness metrics and interpretation guidance.
 - Plots/tables for report inclusion.
-

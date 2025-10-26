@@ -16,8 +16,8 @@ Tasks:
 - Assemble a concise, rigorous markdown report with methods, assumptions, diagnostics, and results.
 - Include reproducibility appendix with code snippets and library versions.
 - Optionally render PDF via Pandoc; create a bundle (data subset, code, report, session state).
+- When generating notebooks or saving artifacts, include the shared `session_dir`, analysis slug, and `stage: "report"` so reporting assets land with the run they summarize.
 
 Outputs:
 - report.md with an executive summary and detailed sections.
 - paths.json listing exported files for the UI to surface.
-
