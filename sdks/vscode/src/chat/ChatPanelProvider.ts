@@ -6,7 +6,7 @@ export interface SessionBinding {
   pollInterval: number;
 }
 
-type SendHandler = (text: string) => Promise<void>;
+type SendHandler = (text: string, files?: string[]) => Promise<void>;
 type SessionResolver = () => SessionBinding | undefined;
 
 export class ChatPanelProvider implements vscode.WebviewViewProvider {
@@ -66,13 +66,18 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
     }
     if (type === "send") {
       const text = typeof record.text === "string" ? record.text.trim() : "";
-      if (!text) {
+      const files = Array.isArray(record.files) ? record.files as string[] : [];
+      if (!text && files.length === 0) {
         return;
       }
-      this.sendHandler(text).catch((error) => {
+      this.sendHandler(text, files).catch((error) => {
         const reason = error instanceof Error ? error.message : String(error);
         void vscode.window.showErrorMessage(`Failed to send message: ${reason}`);
       });
+      return;
+    }
+    if (type === "getAvailableFiles") {
+      void this.handleGetAvailableFiles();
       return;
     }
     if (type === "openNotebook") {
@@ -81,6 +86,14 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
         return;
       }
       void vscode.commands.executeCommand("opencode.openNotebook", notebookPath);
+      return;
+    }
+    if (type === "openFile") {
+      const filePath = typeof record.path === "string" ? record.path : "";
+      if (!filePath) {
+        return;
+      }
+      void vscode.commands.executeCommand("opencode.openFile", filePath);
     }
   }
 
@@ -88,6 +101,8 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
     const nonce = this.createNonce();
     const cspSource = webview.cspSource;
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, "media", "chat-webview.js"));
+    const attachmentHandlerUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, "media", "attachment-handler.js"));
+    const attachmentStylesUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, "media", "attachment-styles.css"));
     const cacheBuster = Date.now();
     const defaultPoll = this.resolveSession()?.pollInterval ?? 1200;
 
@@ -126,6 +141,8 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
       details.thinking pre {margin: 0.25rem 0 0; padding: 0.5rem; border-radius: 4px; background: var(--vscode-editorWidget-background); border: 1px solid var(--vscode-editorWidget-border); white-space: pre-wrap; font-size: 0.85rem;}
       details.thinking ul {margin: 0.25rem 0 0; padding-left: 1.25rem;}
       details.thinking li {margin: 0.2rem 0; font-size: 0.85rem;}
+      .file-link {margin-left: 0.35rem; padding: 0.2rem 0.6rem; border-radius: 4px; border: 1px solid var(--vscode-editorWidget-border); background: var(--vscode-editor-background); color: var(--vscode-textLink-foreground); cursor: pointer; font-size: 0.85rem;}
+      .file-link:hover {background: var(--vscode-editorWidget-background);}
     `;
 
     return `<!DOCTYPE html>
@@ -135,6 +152,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
           <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: https:; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src http://localhost:* https://localhost:*;" />
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
           <style>${styles}</style>
+          <link rel="stylesheet" nonce="${nonce}" href="${attachmentStylesUri}">
           <title>Causal Workflow</title>
         </head>
         <body>
@@ -146,13 +164,66 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
             <section id="messages"></section>
           </main>
           <form id="composer">
-            <textarea id="input" rows="3" placeholder="Ask about your causal workflow..."></textarea>
-            <button type="submit">Send</button>
+            <div id="attachmentBar" class="attachment-bar">
+              <div class="attachment-tabs">
+                <button type="button" class="tab-btn active" data-source="tabs">📑 Active Tabs</button>
+                <button type="button" class="tab-btn" data-source="files">📁 Files</button>
+              </div>
+              <div class="attachment-content">
+                <div id="attachmentList" class="attachment-list"></div>
+              </div>
+            </div>
+            <div id="selectedFiles" class="selected-files"></div>
+            <div class="input-container">
+              <button type="button" id="attachBtn" class="attach-btn" title="Add files, folders, docs..." aria-label="Attach files">📎</button>
+              <textarea id="input" rows="3" placeholder="Ask about your causal workflow..."></textarea>
+              <button type="submit">Send</button>
+            </div>
           </form>
           <script nonce="${nonce}">window.__CAUSAL_CHAT_CONFIG__ = { pollInterval: ${defaultPoll} };</script>
+          <script nonce="${nonce}" src="${attachmentHandlerUri}?v=${cacheBuster}"></script>
           <script nonce="${nonce}" src="${scriptUri}?v=${cacheBuster}"></script>
         </body>
       </html>`;
+  }
+
+  private async handleGetAvailableFiles() {
+    const tabs = await this.getActiveTabs();
+    const files = await this.getWorkspaceFiles();
+
+    this.view?.webview.postMessage({
+      type: "availableFiles",
+      sources: {
+        tabs,
+        files,
+      },
+    });
+  }
+
+  private async getActiveTabs(): Promise<Array<{ path: string; relativePath: string }>> {
+    const tabs = vscode.window.tabGroups.all.flatMap((group) => group.tabs);
+    return tabs
+      .filter((tab) => tab.input instanceof vscode.TabInputText)
+      .map((tab) => {
+        const input = tab.input as vscode.TabInputText;
+        return {
+          path: input.uri.fsPath,
+          relativePath: vscode.workspace.asRelativePath(input.uri),
+        };
+      });
+  }
+
+  private async getWorkspaceFiles(): Promise<Array<{ path: string; relativePath: string }>> {
+    try {
+      const files = await vscode.workspace.findFiles("**/*", "**/node_modules/**", 100);
+      return files.map((uri) => ({
+        path: uri.fsPath,
+        relativePath: vscode.workspace.asRelativePath(uri),
+      }));
+    } catch (error) {
+      console.error("Error finding workspace files:", error);
+      return [];
+    }
   }
 
   private createNonce() {

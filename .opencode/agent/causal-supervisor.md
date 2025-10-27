@@ -43,3 +43,5 @@ When delegating, include:
 - Validation criteria and acceptance thresholds
 
 Deliver concise progress updates and keep the user in the loop for key tradeoffs.
+
+- Remind stage agents to pass rich `markdown` summaries alongside `cell_run` invocations so every notebook cell includes a narrative explanation.

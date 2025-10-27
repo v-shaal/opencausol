@@ -1,5 +1,7 @@
 """Jupyter kernel management for code execution."""
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
@@ -32,6 +34,7 @@ class KernelManager:
         self.stage_notebooks: dict[str, dict[str, Any]] = {}
         self.stage_paths: dict[str, Path] = {}
         self.stage_exec_counts: dict[str, int] = defaultdict(int)
+        self._bootstrap_initialized = False
         self._ensure_stage(self.default_stage)
 
     def _normalize_stage(self, stage: Optional[str]) -> str:
@@ -55,6 +58,52 @@ class KernelManager:
             self.stage_exec_counts.setdefault(stage_key, 0)
         return stage_key
 
+    def _bootstrap_environment(self, primary_stage: str):
+        if not self.kernel_client:
+            return
+        if not self._bootstrap_initialized:
+            init_code = f"""
+import json, pathlib
+__OPENCODE_RUN_DIR = pathlib.Path({repr(str(self.run_dir))})
+__OPENCODE_RUN_DIR.mkdir(parents=True, exist_ok=True)
+__OPENCODE_STAGE = {repr(primary_stage)}
+
+def jupyter_runner_artifact_store(name, data, format="json", stage=None):
+    stage_key = (stage or __OPENCODE_STAGE) or 'analysis'
+    root = __OPENCODE_RUN_DIR / 'artifacts' / stage_key
+    root.mkdir(parents=True, exist_ok=True)
+    if format == 'json':
+        path = root / f"{ '{' }name{ '}' }.json"
+        with path.open('w') as f:
+            json.dump(data, f, indent=2)
+    elif format == 'text':
+        path = root / f"{ '{' }name{ '}' }.txt"
+        with path.open('w') as f:
+            f.write(str(data))
+    elif format == 'binary':
+        path = root / name
+        with path.open('wb') as f:
+            f.write(data)
+    else:
+        raise ValueError(f"Unsupported format: { '{' }format{ '}' }")
+    print(f"[opencode] artifact saved: { '{' }path{ '}' }")
+    return str(path)
+
+def jupyter_runner_set_stage(stage):
+    global __OPENCODE_STAGE
+    __OPENCODE_STAGE = stage
+    return __OPENCODE_STAGE
+
+jupyter_runner_set_stage(__OPENCODE_STAGE)
+"""
+            self.kernel_client.execute(init_code, silent=True)
+            self._bootstrap_initialized = True
+        else:
+            self.kernel_client.execute(
+                f"jupyter_runner_set_stage({repr(primary_stage)})",
+                silent=True,
+            )
+
     def ensure_kernel(self, python_version: Optional[str] = None, stage: Optional[str] = None) -> dict[str, Any]:
         """
         Ensure a Jupyter kernel is running.
@@ -68,6 +117,7 @@ class KernelManager:
         if self.kernel_manager and self.kernel_manager.is_alive():
             logger.info("Reusing existing kernel")
             stage_key = self._ensure_stage(stage)
+            self._bootstrap_environment(stage_key)
             return {
                 "status": "reused",
                 "kernel_id": self.kernel_manager.kernel_id,
@@ -98,6 +148,7 @@ class KernelManager:
 
         logger.info(f"Kernel started: {self.kernel_manager.kernel_id}")
         stage_key = self._ensure_stage(stage)
+        self._bootstrap_environment(stage_key)
         return {
             "status": "started",
             "kernel_id": self.kernel_manager.kernel_id,
@@ -111,6 +162,7 @@ class KernelManager:
         timeout: int = 60,
         silent: bool = False,
         stage: Optional[str] = None,
+        markdown: Optional[list[str] | str] = None,
     ) -> dict[str, Any]:
         """
         Execute code in the kernel.
@@ -136,6 +188,25 @@ class KernelManager:
         start_time = time.time()
         stage_key = self._ensure_stage(stage)
         self.stage_exec_counts[stage_key] += 1
+
+        markdown_cells: list[str] = []
+        if markdown:
+            if isinstance(markdown, str):
+                candidates = [markdown]
+            else:
+                candidates = list(markdown)
+            for entry in candidates:
+                if not entry:
+                    continue
+                trimmed = str(entry).strip()
+                if not trimmed:
+                    continue
+                self._add_markdown_cell(stage_key, trimmed)
+                markdown_cells.append(trimmed)
+
+        self.kernel_client.execute(
+            f"jupyter_runner_set_stage({repr(stage_key)})", silent=True
+        )
 
         # Execute code
         msg_id = self.kernel_client.execute(code, silent=silent)
@@ -203,6 +274,7 @@ class KernelManager:
             "notebook_path": self.get_notebook_path(stage_key),
             "stage": stage_key,
             "cell_index": cell_index,
+            "markdown_cells": markdown_cells,
         }
 
     def get_variable(self, name: str) -> dict[str, Any]:
@@ -345,6 +417,18 @@ except NameError:
         with open(path, "w") as f:
             json.dump(data, f, indent=2)
         logger.info(f"Saved notebook: {path}")
+
+    def _add_markdown_cell(self, stage_key: str, text: str) -> int:
+        """Add a markdown cell to the specified stage notebook."""
+        notebook = self.stage_notebooks[stage_key]
+        cell = {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": text.split('\n'),
+        }
+        notebook["cells"].append(cell)
+        self._save_notebook(stage_key, notebook)
+        return len(notebook["cells"]) - 1
 
     def _add_cell_to_notebook(
         self,

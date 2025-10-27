@@ -19,6 +19,8 @@ Tasks:
 - Return diagnostics: balance improvement, overlap, first-stage F for IV, pre-trend tests for DiD, bandwidth checks for RD.
 - Execute Jupyter tools with the supervisor-provided `session_dir`, analysis slug, and `stage: "estimation"` so estimation notebooks and artifacts are stored independently.
 
+- Prepend each notebook update with a short `markdown` description when calling Jupyter tools (set the `markdown` parameter).
+
 Outputs:
 - estimate.json with effect estimates, SE/CI, diagnostics, and model configs.
 - Saved plots/artifacts and their paths for the UI to display.

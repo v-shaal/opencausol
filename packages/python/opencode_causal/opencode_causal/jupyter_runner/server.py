@@ -1,5 +1,7 @@
 """MCP server for Jupyter kernel management."""
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
@@ -135,6 +137,13 @@ def create_server() -> Server:
                             "type": "string",
                             "description": "Short slug for the analysis (used if a session directory was not provided)",
                         },
+                        "markdown": {
+                            "oneOf": [
+                                {"type": "string"},
+                                {"type": "array", "items": {"type": "string"}}
+                            ],
+                            "description": "Optional markdown (string or array of strings) to insert as descriptive cells before the code cell",
+                        },
                         "stage": {
                             "type": "string",
                             "description": "Stage identifier (e.g., 'eda', 'dag', 'estimation')",
@@ -228,9 +237,10 @@ def create_server() -> Server:
                 session_dir = arguments.get("session_dir")
                 analysis_name = arguments.get("analysis_name")
                 stage = arguments.get("stage")
+                markdown = arguments.get("markdown")
 
                 km = resolve_manager(session_dir, analysis_name, create=True)
-                result = km.execute_code(code, timeout=timeout, silent=silent, stage=stage)
+                result = km.execute_code(code, timeout=timeout, silent=silent, stage=stage, markdown=markdown)
                 return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
             elif name == "get_variable":

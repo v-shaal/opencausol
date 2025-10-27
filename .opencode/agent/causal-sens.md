@@ -18,6 +18,8 @@ Tasks:
 - Propose placebo and negative control checks when applicable.
 - Use the shared `session_dir` and analysis slug with `stage: "sensitivity"` for all notebook code and stored artifacts.
 
+- Prepend each notebook update with a short `markdown` description when calling Jupyter tools (set the `markdown` parameter).
+
 Outputs:
 - sensitivity.json with robustness metrics and interpretation guidance.
 - Plots/tables for report inclusion.

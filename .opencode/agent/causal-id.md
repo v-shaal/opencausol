@@ -18,6 +18,8 @@ Tasks:
 - Record assumptions explicitly and propose alternatives if not identifiable.
 - Route all Jupyter tool calls through the shared `session_dir` with the analysis slug and set `stage: "identification"` so notebooks and artifacts are easy to trace.
 
+- Prepend each notebook update with a short `markdown` description when calling Jupyter tools (set the `markdown` parameter).
+
 Outputs:
 - id.json detailing strategy, adjustment set, and assumptions.
 - Validation status and gates for proceeding to estimation.

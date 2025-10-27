@@ -20,6 +20,8 @@ Tasks:
 - Suggest minimal preprocessing (encoding, trimming, transformations) without leaking post-treatment info.
 - When calling Jupyter MCP tools, always send the shared `session_dir`, the supervisor-provided `analysis_name` slug, and `stage: "eda"` so results land in the EDA notebook and artifact folder.
 
+- Prepend each notebook update with a short `markdown` description when calling Jupyter tools (set the `markdown` parameter).
+
 Outputs:
 - eda.json summarizing schema, missingness, overlap, and balance warnings.
 - Optional plots (saved as PNG/HTML) and paths to artifacts.

@@ -44,21 +44,79 @@ export function activate(context: vscode.ExtensionContext) {
     });
   }
 
-  const sendChatMessage = async (text: string) => {
+  const sendChatMessage = async (text: string, files: string[] = []) => {
     const binding = state.session;
     if (!binding) {
       void vscode.window.showInformationMessage("Launch the causal workflow before sending messages.");
       return;
     }
+
+    // Build message parts
+    const parts: any[] = [];
+
+    // Add text part if present
+    if (text && text.trim()) {
+      parts.push({ type: "text", text });
+    }
+
+    // Add file parts if present
+    if (files.length > 0) {
+      for (const filePath of files) {
+        try {
+          const uri = vscode.Uri.file(filePath);
+          const content = await vscode.workspace.fs.readFile(uri);
+          const relativePath = vscode.workspace.asRelativePath(uri);
+
+          // Determine media type based on file extension
+          const ext = filePath.split(".").pop()?.toLowerCase() || "";
+          const mediaTypeMap: Record<string, string> = {
+            js: "text/javascript",
+            ts: "text/typescript",
+            jsx: "text/javascript",
+            tsx: "text/typescript",
+            py: "text/x-python",
+            json: "application/json",
+            md: "text/markdown",
+            html: "text/html",
+            css: "text/css",
+            txt: "text/plain",
+            csv: "text/csv",
+            ipynb: "application/x-ipynb+json",
+          };
+          const mediaType = mediaTypeMap[ext] || "text/plain";
+
+          // Create data URI with base64 encoded content
+          const base64Content = Buffer.from(content).toString("base64");
+          const dataUri = `data:${mediaType};base64,${base64Content}`;
+
+          parts.push({
+            type: "file",
+            mime: mediaType,
+            filename: relativePath,
+            url: dataUri,
+          });
+        } catch (error) {
+          console.error(`[opencode] Failed to read file: ${filePath}`, error);
+          void vscode.window.showWarningMessage(`Failed to read file: ${filePath}`);
+        }
+      }
+    }
+
+    if (parts.length === 0) {
+      console.warn("[opencode] No content to send (empty text and no files)");
+      return;
+    }
+
     const target = `http://localhost:${binding.port}/session/${binding.sessionID}/message`;
     const response = await fetch(target, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         agent: "causal-supervisor",
-        parts: [{ type: "text", text }],
+        parts,
       }),
     }).catch(() => undefined);
+
     if (!response) {
       void vscode.window.showErrorMessage("Failed to reach opencode session.");
       return;
@@ -189,6 +247,28 @@ export function activate(context: vscode.ExtensionContext) {
     },
   );
 
+  const openFileDisposable = vscode.commands.registerCommand("opencode.openFile", async (filePath: string) => {
+    const trimmed = typeof filePath === "string" ? filePath.trim() : "";
+    if (!trimmed) {
+      void vscode.window.showErrorMessage("File path missing.");
+      return;
+    }
+
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    let resolved = trimmed;
+    if (workspaceFolder && !path.isAbsolute(trimmed)) {
+      resolved = path.join(workspaceFolder.uri.fsPath, trimmed);
+    }
+
+    const fileUri = vscode.Uri.file(resolved);
+    try {
+      await vscode.commands.executeCommand("vscode.open", fileUri);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      void vscode.window.showErrorMessage(`Failed to open file: ${reason}`);
+    }
+  });
+
   if (state.session) {chatProvider.setSession(state.session);}
 
   context.subscriptions.push(
@@ -198,6 +278,7 @@ export function activate(context: vscode.ExtensionContext) {
     openChatDisposable,
     startWorkflowDisposable,
     openNotebookDisposable,
+    openFileDisposable,
     chatDisposable,
   );
 

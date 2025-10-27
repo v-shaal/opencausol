@@ -19,6 +19,8 @@ Tasks:
 - Compute minimal sufficient adjustment sets and document assumptions.
 - Use the Jupyter tools with `session_dir`, the shared `analysis_name` slug, and `stage: "dag"` so DAG code and artifacts are isolated under the run folder.
 
+- Prepend each notebook update with a short `markdown` description when calling Jupyter tools (set the `markdown` parameter).
+
 Outputs:
 - dag.json and/or dag.dot; dag-sets.json with minimal adjustment sets.
 - A brief rationale for the final DAG and any contested edges.

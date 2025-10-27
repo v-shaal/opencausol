@@ -18,6 +18,8 @@ Tasks:
 - Optionally render PDF via Pandoc; create a bundle (data subset, code, report, session state).
 - When generating notebooks or saving artifacts, include the shared `session_dir`, analysis slug, and `stage: "report"` so reporting assets land with the run they summarize.
 
+- Prepend each notebook update with a short `markdown` description when calling Jupyter tools (set the `markdown` parameter).
+
 Outputs:
 - report.md with an executive summary and detailed sections.
 - paths.json listing exported files for the UI to surface.

@@ -1,14 +1,17 @@
 (function () {
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then((regs) => {
-    for (const reg of regs) {
-      const url = reg && reg.active ? reg.active.scriptURL : '';
-      if (!url || !url.includes('service-worker.js')) {
-        reg.unregister().catch(() => {});
-      }
-    }
-  }).catch(() => {});
-}
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker
+      .getRegistrations()
+      .then((regs) => {
+        for (const reg of regs) {
+          const url = reg && reg.active ? reg.active.scriptURL : "";
+          if (!url || !/service-worker\.js/.test(url)) {
+            reg.unregister().catch(() => {});
+          }
+        }
+      })
+      .catch(() => {});
+  }
 
   const vscode = acquireVsCodeApi();
   const config = window.__CAUSAL_CHAT_CONFIG__ || {};
@@ -26,6 +29,7 @@ if ('serviceWorker' in navigator) {
   };
 
   const NOTEBOOK_EXTENSIONS = [".ipynb"];
+  const FILE_PATH_REGEX = /(?:^|\s)(\/[^\s]+\.[A-Za-z0-9._-]+)/g;
 
   const statusNode = document.getElementById("status");
   const messagesNode = document.getElementById("messages");
@@ -36,26 +40,22 @@ if ('serviceWorker' in navigator) {
     return;
   }
 
-  const escapeHtml = (value) => {
-    return String(value)
+  const escapeHtml = (value) =>
+    String(value)
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
-  };
 
-  const renderInline = (value) => {
-    let str = escapeHtml(value);
-    str = str.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-    str = str.replace(/\*(.+?)\*/g, "<em>$1</em>");
-    str = str.replace(/`([^`]+)`/g, "<code>$1</code>");
-    return str;
-  };
+  const renderInline = (value) =>
+    escapeHtml(value)
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.+?)\*/g, "<em>$1</em>")
+      .replace(/`([^`]+)`/g, "<code>$1</code>");
 
   const renderMarkdown = (text) => {
-    if (!text) { return "<p></p>"; }
-
+    if (!text) return "<p></p>";
     const lines = String(text).split(/\n/);
     let html = "";
     let paragraph = [];
@@ -63,9 +63,8 @@ if ('serviceWorker' in navigator) {
     let inCode = false;
 
     const flushParagraph = () => {
-      if (!paragraph.length) { return; }
-      const content = renderInline(paragraph.join(" "));
-      html += `<p>${content}</p>`;
+      if (!paragraph.length) return;
+      html += `<p>${renderInline(paragraph.join(" "))}</p>`;
       paragraph = [];
     };
 
@@ -80,12 +79,12 @@ if ('serviceWorker' in navigator) {
       const raw = line;
       const trimmed = raw.trim();
 
-      if (trimmed.startsWith("```") || trimmed.startsWith("~~~")) {
+      if (/^```|^~~~/.test(trimmed)) {
         if (!inCode) {
           flushParagraph();
           closeList();
-          inCode = true;
           html += "<pre><code>";
+          inCode = true;
         } else {
           html += "</code></pre>";
           inCode = false;
@@ -108,8 +107,7 @@ if ('serviceWorker' in navigator) {
         flushParagraph();
         closeList();
         const level = Math.min(trimmed.match(/^#+/)[0].length, 3);
-        const content = renderInline(trimmed.replace(/^#{1,6}\s*/, ""));
-        html += `<h${level}>${content}</h${level}>`;
+        html += `<h${level}>${renderInline(trimmed.replace(/^#{1,6}\s*/, ""))}</h${level}>`;
         return;
       }
 
@@ -131,13 +129,13 @@ if ('serviceWorker' in navigator) {
     }
     flushParagraph();
     closeList();
-
     return html || "<p></p>";
   };
 
   const renderToolDetails = (entry) => {
     const container = document.createElement("div");
     container.className = "tool-entry";
+
     const header = document.createElement("div");
     header.className = "tool-header";
     const statusLabel = entry.status ? ` (${entry.status})` : "";
@@ -154,11 +152,55 @@ if ('serviceWorker' in navigator) {
     if (entry.output) {
       const outputBlock = document.createElement("div");
       outputBlock.className = "tool-output";
-      const snippet = renderMarkdown(entry.output);
-      outputBlock.innerHTML = snippet;
+      outputBlock.innerHTML = renderMarkdown(entry.output);
       container.appendChild(outputBlock);
     }
+
+    decorateFileReferences(container);
     return container;
+  };
+
+  const decorateFileReferences = (container) => {
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
+    const texts = [];
+    let current;
+    while ((current = walker.nextNode())) {
+      texts.push(current);
+    }
+
+    texts.forEach((textNode) => {
+      const value = textNode.nodeValue || "";
+      if (!value.trim()) return;
+
+      FILE_PATH_REGEX.lastIndex = 0;
+      const matches = [...value.matchAll(FILE_PATH_REGEX)];
+      if (!matches.length) return;
+
+      const fragment = document.createDocumentFragment();
+      let lastIndex = 0;
+
+      matches.forEach((match) => {
+        const full = match[1];
+        if (match.index > lastIndex) {
+          fragment.appendChild(document.createTextNode(value.slice(lastIndex, match.index)));
+        }
+        fragment.appendChild(document.createTextNode(full));
+
+        const button = document.createElement("button");
+        button.className = "file-link";
+        button.dataset.path = full;
+        button.textContent = `Open ${full.split("/").pop()}`;
+        fragment.appendChild(button);
+
+        lastIndex = match.index + full.length;
+      });
+
+      if (lastIndex < value.length) {
+        fragment.appendChild(document.createTextNode(value.slice(lastIndex)));
+      }
+
+      textNode.replaceWith(fragment);
+    });
   };
 
   const renderStatus = () => {
@@ -170,30 +212,29 @@ if ('serviceWorker' in navigator) {
   };
 
   const normalizeNotebookPath = (value) => {
-    if (!value || typeof value !== "string") { return undefined; }
+    if (!value || typeof value !== "string") return undefined;
     const trimmed = value.trim();
-    if (!trimmed) { return undefined; }
+    if (!trimmed) return undefined;
     const lower = trimmed.toLowerCase();
-    if (!NOTEBOOK_EXTENSIONS.some((ext) => lower.endsWith(ext))) { return undefined; }
+    if (!NOTEBOOK_EXTENSIONS.some((ext) => lower.endsWith(ext))) return undefined;
     return trimmed;
   };
 
   const extractNotebookFromOutput = (output) => {
-    if (!output) { return undefined; }
+    if (!output) return undefined;
     if (typeof output === "string") {
       const direct = normalizeNotebookPath(output);
-      if (direct) { return direct; }
+      if (direct) return direct;
       try {
-        const parsed = JSON.parse(output);
-        return extractNotebookFromOutput(parsed);
-      } catch (_error) {
+        return extractNotebookFromOutput(JSON.parse(output));
+      } catch (_) {
         return undefined;
       }
     }
     if (Array.isArray(output)) {
       for (const item of output) {
         const found = extractNotebookFromOutput(item);
-        if (found) { return found; }
+        if (found) return found;
       }
       return undefined;
     }
@@ -201,22 +242,21 @@ if ('serviceWorker' in navigator) {
       const candidates = [output.notebookPath, output.notebook_path, output.path, output.notebook, output.file];
       for (const candidate of candidates) {
         const normalized = normalizeNotebookPath(candidate);
-        if (normalized) { return normalized; }
+        if (normalized) return normalized;
       }
-      return undefined;
     }
     return undefined;
   };
 
   const extractNotebookPath = (part) => {
-    if (!part || typeof part !== "object") { return undefined; }
+    if (!part || typeof part !== "object") return undefined;
     if (part.type === "tool" && part.state && part.state.status === "completed") {
       const fromOutput = extractNotebookFromOutput(part.state.output);
-      if (fromOutput) { return fromOutput; }
+      if (fromOutput) return fromOutput;
       if (Array.isArray(part.state.attachments)) {
         for (const attachment of part.state.attachments) {
-          const normalized = normalizeNotebookPath((attachment && (attachment.filename || attachment.url)) || undefined);
-          if (normalized) { return normalized; }
+          const normalized = normalizeNotebookPath(attachment && (attachment.filename || attachment.url));
+          if (normalized) return normalized;
         }
       }
     }
@@ -243,7 +283,7 @@ if ('serviceWorker' in navigator) {
       const sectionState = getSectionState(messageId);
 
       const wrapper = document.createElement("article");
-      const role = item && item.info && typeof item.info.role === "string" ? item.info.role : (typeof item.role === "string" ? item.role : "assistant");
+      const role = item && item.info && typeof item.info.role === "string" ? item.info.role : item.role || "assistant";
       wrapper.className = `msg ${role}`;
 
       const contentParts = [];
@@ -253,7 +293,7 @@ if ('serviceWorker' in navigator) {
 
       if (Array.isArray(item.parts)) {
         for (const part of item.parts) {
-          if (!part || typeof part !== "object") { continue; }
+          if (!part || typeof part !== "object") continue;
           if (part.type === "text" && typeof part.text === "string") {
             contentParts.push(part.text);
             if (part.metadata && part.metadata.intent === "analysis" && part.text.trim()) {
@@ -261,26 +301,28 @@ if ('serviceWorker' in navigator) {
             }
           }
           if (part.type === "reasoning") {
-            const raw = typeof part.text === 'string' ? part.text.trim() : '';
+            const raw = typeof part.text === "string" ? part.text.trim() : "";
             let chosen = raw;
             if (!chosen || /^[0w\s]+$/.test(chosen)) {
               const meta = part.metadata || {};
-              const summary = typeof meta.summary === 'string' ? meta.summary :
-                typeof meta.reasoningSummary === 'string' ? meta.reasoningSummary :
-                typeof meta.reasoning_summary === 'string' ? meta.reasoning_summary :
-                Array.isArray(meta.summary) ? meta.summary.join(' ') : '';
-              if (summary && typeof summary === 'string') {
-                chosen = summary.trim();
-              } else {
-                chosen = '';
-              }
+              const summary =
+                typeof meta.summary === "string"
+                  ? meta.summary
+                  : typeof meta.reasoningSummary === "string"
+                  ? meta.reasoningSummary
+                  : typeof meta.reasoning_summary === "string"
+                  ? meta.reasoning_summary
+                  : Array.isArray(meta.summary)
+                  ? meta.summary.join(" ")
+                  : "";
+              chosen = summary.trim();
             }
             if (chosen) {
               thoughts.push(chosen);
             }
           }
           if (part.type === "tool") {
-            const toolLabel = typeof part.tool === "string" ? part.tool : (typeof part.name === "string" ? part.name : "tool");
+            const toolLabel = typeof part.tool === "string" ? part.tool : part.name || "tool";
             const stateInfo = part.state || {};
             toolStates.push({
               tool: toolLabel,
@@ -291,7 +333,7 @@ if ('serviceWorker' in navigator) {
           }
           if (!notebookPath) {
             const detected = extractNotebookPath(part);
-            if (detected) { notebookPath = detected; }
+            if (detected) notebookPath = detected;
           }
         }
       }
@@ -300,6 +342,7 @@ if ('serviceWorker' in navigator) {
       messageBlock.className = "message-content";
       const combinedContent = contentParts.join("\n\n");
       messageBlock.innerHTML = renderMarkdown(combinedContent || "[no content provided]");
+      decorateFileReferences(messageBlock);
       wrapper.appendChild(messageBlock);
 
       if (thoughts.length) {
@@ -319,38 +362,38 @@ if ('serviceWorker' in navigator) {
           details.open = next;
           sectionState.reasoning = next;
         });
-      wrapper.appendChild(details);
-    }
+        wrapper.appendChild(details);
+      }
 
       if (toolStates.length) {
-      const details = document.createElement("details");
-      details.className = "thinking";
-      details.open = !!sectionState.tools;
-      const summary = document.createElement("summary");
-      summary.textContent = "Tool activity";
-      details.appendChild(summary);
-      const container = document.createElement("div");
-      container.className = "tool-list";
-      toolStates.forEach((entry) => {
-        container.appendChild(renderToolDetails(entry));
-      });
-      details.appendChild(container);
-      summary.addEventListener("click", (event) => {
+        const details = document.createElement("details");
+        details.className = "thinking";
+        details.open = !!sectionState.tools;
+        const summary = document.createElement("summary");
+        summary.textContent = "Tool activity";
+        details.appendChild(summary);
+        const container = document.createElement("div");
+        container.className = "tool-list";
+        toolStates.forEach((entry) => container.appendChild(renderToolDetails(entry)));
+        details.appendChild(container);
+        summary.addEventListener("click", (event) => {
           event.preventDefault();
           event.stopPropagation();
           const next = !details.open;
           details.open = next;
           sectionState.tools = next;
         });
-      wrapper.appendChild(details);
-    }
+        wrapper.appendChild(details);
+      }
 
       if (notebookPath) {
         const notebookButton = document.createElement("div");
         notebookButton.style.marginTop = "8px";
         notebookButton.style.paddingTop = "8px";
         notebookButton.style.borderTop = "1px solid var(--vscode-editorGroup-border)";
-        notebookButton.innerHTML = `<button style="font-size: 0.9em; padding: 4px 8px;" onclick='openNotebook(${JSON.stringify(notebookPath)})'>📓 Open Notebook</button>`;
+        notebookButton.innerHTML = `<button style="font-size: 0.9em; padding: 4px 8px;" onclick='openNotebook(${JSON.stringify(
+          notebookPath,
+        )})'>📓 Open Notebook</button>`;
         wrapper.appendChild(notebookButton);
         if (!state.openedNotebooks.has(notebookPath)) {
           state.openedNotebooks.add(notebookPath);
@@ -370,12 +413,13 @@ if ('serviceWorker' in navigator) {
     vscode.postMessage({ type: "openNotebook", notebookPath });
   };
 
-  const fetchJson = (url) => fetch(url)
-    .then((res) => (res.ok ? res.json() : undefined))
-    .catch(() => undefined);
+  const fetchJson = (url) =>
+    fetch(url)
+      .then((res) => (res.ok ? res.json() : undefined))
+      .catch(() => undefined);
 
   const poll = async () => {
-    if (!state.session) { return; }
+    if (!state.session) return;
     const base = `http://localhost:${state.session.port}`;
     const sessionUrl = `${base}/session/${state.session.sessionID}`;
     const messagesUrl = `${sessionUrl}/message`;
@@ -394,7 +438,7 @@ if ('serviceWorker' in navigator) {
     }
     const run = async () => {
       await poll();
-      if (!state.session) { return; }
+      if (!state.session) return;
       state.timer = window.setTimeout(run, state.pollInterval);
     };
     void run();
@@ -407,20 +451,56 @@ if ('serviceWorker' in navigator) {
     schedulePoll();
   };
 
+  // Initialize attachment manager
+  let attachmentManager = null;
+  if (typeof window.AttachmentManager === "function") {
+    attachmentManager = new window.AttachmentManager(vscode);
+    const initialized = attachmentManager.init();
+    if (!initialized) {
+      console.warn("[Chat] Attachment manager failed to initialize");
+      attachmentManager = null;
+    }
+  }
+
   window.addEventListener("message", (event) => {
     const data = event.data;
-    if (!data || typeof data !== "object") { return; }
+    if (!data || typeof data !== "object") return;
     if (data.type === "session") {
       setSession(data);
+    }
+    if (data.type === "availableFiles" && attachmentManager) {
+      attachmentManager.handleAvailableFiles(data);
     }
   });
 
   formNode.addEventListener("submit", (event) => {
     event.preventDefault();
     const value = inputNode.value.trim();
-    if (!value) { return; }
-    vscode.postMessage({ type: "send", text: value });
+    const files = attachmentManager ? attachmentManager.getSelectedFiles() : [];
+
+    if (!value && files.length === 0) return;
+
+    const message = { type: "send", text: value };
+    if (files.length > 0) {
+      message.files = files;
+    }
+
+    vscode.postMessage(message);
     inputNode.value = "";
+
+    if (attachmentManager) {
+      attachmentManager.clearSelection();
+    }
+  });
+
+  messagesNode.addEventListener("click", (event) => {
+    const target = event.target;
+    if (target instanceof HTMLElement && target.classList.contains("file-link")) {
+      const targetPath = target.dataset.path;
+      if (targetPath) {
+        vscode.postMessage({ type: "openFile", path: targetPath });
+      }
+    }
   });
 
   renderStatus();

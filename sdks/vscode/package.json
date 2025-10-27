@@ -58,6 +58,10 @@
       {
         "command": "opencode.causal.start",
         "title": "Start Causal Workflow Session"
+      },
+      {
+        "command": "opencode.openFile",
+        "title": "Open File from Causal Chat"
       }
     ],
     "views": {
