@@ -1,17 +1,4 @@
 (function () {
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker
-      .getRegistrations()
-      .then((regs) => {
-        for (const reg of regs) {
-          const url = reg && reg.active ? reg.active.scriptURL : "";
-          if (!url || !/service-worker\.js/.test(url)) {
-            reg.unregister().catch(() => {});
-          }
-        }
-      })
-      .catch(() => {});
-  }
 
   const vscode = acquireVsCodeApi();
   const config = window.__CAUSAL_CHAT_CONFIG__ || {};
@@ -26,6 +13,8 @@
     pollInterval: defaultPoll,
     openedNotebooks: new Set(),
     openSections: Object.create(null),
+    rtc: undefined,
+    notebookClientInitialized: false,
   };
 
   const NOTEBOOK_EXTENSIONS = [".ipynb"];
@@ -35,10 +24,118 @@
   const messagesNode = document.getElementById("messages");
   const inputNode = document.getElementById("input");
   const formNode = document.getElementById("composer");
+  const notebookNode = document.getElementById("notebook-view");
 
   if (!statusNode || !messagesNode || !inputNode || !formNode) {
     return;
   }
+
+  const hasNotebookClient = () => typeof window.RtcNotebookClient === "object" && window.RtcNotebookClient !== null;
+
+  const ensureNotebookClient = () => {
+    if (!notebookNode || !hasNotebookClient()) {
+      return undefined;
+    }
+    if (!state.notebookClientInitialized) {
+      try {
+        window.RtcNotebookClient.init({ container: notebookNode });
+        state.notebookClientInitialized = true;
+      } catch (error) {
+        console.error("[Chat] Failed to initialise RTC notebook client", error);
+        return undefined;
+      }
+    }
+    return window.RtcNotebookClient;
+  };
+
+  const clearRtc = () => {
+    if (hasNotebookClient() && state.notebookClientInitialized) {
+      try {
+        window.RtcNotebookClient.disconnect();
+      } catch (_) {
+        /* ignore */
+      }
+    }
+    state.rtc = undefined;
+    if (notebookNode) {
+      notebookNode.classList.add("hidden");
+    }
+  };
+
+  const extractRtcObject = (value) => {
+    if (!value || typeof value !== "object") {
+      return undefined;
+    }
+    if (value.rtc && typeof value.rtc === "object") {
+      return value.rtc;
+    }
+    if (value.output && typeof value.output === "object" && value.output.rtc) {
+      return value.output.rtc;
+    }
+    return undefined;
+  };
+
+  const parseRtcFromValue = (value) => {
+    if (!value) {
+      return undefined;
+    }
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        return extractRtcObject(parsed);
+      } catch (_) {
+        return undefined;
+      }
+    }
+    if (typeof value === "object") {
+      return extractRtcObject(value);
+    }
+    return undefined;
+  };
+
+  const updateRtc = (rtc) => {
+    if (!rtc || rtc.enabled === false) {
+      clearRtc();
+      return;
+    }
+    const rooms = rtc.rooms && typeof rtc.rooms === "object" ? rtc.rooms : {};
+    const keys = Object.keys(rooms);
+    if (!keys.length) {
+      clearRtc();
+      return;
+    }
+    const preferred = state.rtc?.stage;
+    const stage = preferred && rooms[preferred] ? preferred : rooms.analysis ? "analysis" : keys[0];
+    const previous = state.rtc?.config;
+    const changed =
+      !state.rtc ||
+      stage !== state.rtc.stage ||
+      rtc.port !== previous?.port ||
+      rtc.token !== previous?.token ||
+      rtc.host !== previous?.host;
+
+    state.rtc = { config: rtc, stage };
+    if (!changed) {
+      return;
+    }
+
+    const client = ensureNotebookClient();
+    if (!client) {
+      return;
+    }
+
+    if (notebookNode) {
+      notebookNode.classList.remove("hidden");
+    }
+
+    client.connect({
+      host: rtc.host || "127.0.0.1",
+      port: rtc.port,
+      token: rtc.token,
+      rooms,
+      stage,
+    });
+  };
 
   const escapeHtml = (value) =>
     String(value)
@@ -278,6 +375,8 @@
     state.messages = Array.isArray(items) ? items : [];
     messagesNode.innerHTML = "";
 
+    let rtcCandidate;
+
     state.messages.forEach((item, index) => {
       const messageId = item && item.info && item.info.id ? String(item.info.id) : String(index);
       const sectionState = getSectionState(messageId);
@@ -299,6 +398,8 @@
             if (part.metadata && part.metadata.intent === "analysis" && part.text.trim()) {
               thoughts.push(part.text.trim());
             }
+            const maybeRtc = parseRtcFromValue(part.text);
+            if (maybeRtc) rtcCandidate = maybeRtc;
           }
           if (part.type === "reasoning") {
             const raw = typeof part.text === "string" ? part.text.trim() : "";
@@ -330,6 +431,8 @@
               title: typeof stateInfo.title === "string" ? stateInfo.title : undefined,
               output: typeof stateInfo.output === "string" ? stateInfo.output : undefined,
             });
+            const maybeRtc = parseRtcFromValue(stateInfo.output);
+            if (maybeRtc) rtcCandidate = maybeRtc;
           }
           if (!notebookPath) {
             const detected = extractNotebookPath(part);
@@ -404,6 +507,10 @@
       messagesNode.appendChild(wrapper);
     });
 
+    if (rtcCandidate) {
+      updateRtc(rtcCandidate);
+    }
+
     if (atBottom) {
       messagesNode.scrollTop = messagesNode.scrollHeight;
     }
@@ -447,6 +554,9 @@
   const setSession = (payload) => {
     state.session = payload.session;
     state.pollInterval = typeof payload.session?.pollInterval === "number" ? payload.session.pollInterval : defaultPoll;
+    if (!state.session) {
+      clearRtc();
+    }
     renderStatus();
     schedulePoll();
   };
@@ -470,6 +580,9 @@
     }
     if (data.type === "availableFiles" && attachmentManager) {
       attachmentManager.handleAvailableFiles(data);
+    }
+    if (data.type === "browseFilesResult" && attachmentManager) {
+      attachmentManager.handleBrowseFilesResult(data);
     }
   });
 
@@ -504,5 +617,6 @@
   });
 
   renderStatus();
+  ensureNotebookClient();
   vscode.postMessage({ type: "ready" });
 })();

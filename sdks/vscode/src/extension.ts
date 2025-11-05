@@ -2,6 +2,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 
 import { ChatPanelProvider, type SessionBinding } from "./chat/ChatPanelProvider";
+import { registerNotebookSync } from "./notebookSync";
 
 export function deactivate() {}
 
@@ -11,6 +12,11 @@ const DEFAULT_POLL_INTERVAL = 1200;
 
 export function activate(context: vscode.ExtensionContext) {
   const state: { session?: SessionBinding } = {};
+
+  const useRtcNotebookSync = () => {
+    const config = vscode.workspace.getConfiguration("opencode.causal");
+    return config.get<boolean>("rtcNotebookSync") === true;
+  };
 
   const pollInterval = () => {
     const configuration = vscode.workspace.getConfiguration("opencode.causal");
@@ -44,6 +50,62 @@ export function activate(context: vscode.ExtensionContext) {
     });
   }
 
+  const MAX_ATTACHMENT_BYTES = 2 * 1024 * 1024; // 2 MB limit for inline attachments
+  const TEXTUAL_MIMES = new Set(["application/json", "application/x-ipynb+json"]);
+  const MIME_TABLE: Record<string, string> = {
+    js: "text/javascript",
+    jsx: "text/javascript",
+    ts: "text/x-typescript",
+    tsx: "text/x-typescript",
+    py: "text/x-python",
+    json: "application/json",
+    md: "text/markdown",
+    html: "text/html",
+    css: "text/css",
+    txt: "text/plain",
+    log: "text/plain",
+    csv: "text/csv",
+    tsv: "text/tab-separated-values",
+    ipynb: "application/x-ipynb+json",
+    yml: "text/yaml",
+    yaml: "text/yaml",
+    sh: "text/x-shellscript",
+    bash: "text/x-shellscript",
+    ps1: "text/x-powershell",
+    svg: "image/svg+xml",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    webp: "image/webp",
+    bmp: "image/bmp",
+    ico: "image/vnd.microsoft.icon",
+    pdf: "application/pdf",
+    mp3: "audio/mpeg",
+    wav: "audio/wav",
+    ogg: "audio/ogg",
+    mp4: "video/mp4",
+    mov: "video/quicktime",
+    zip: "application/zip",
+    gz: "application/gzip",
+    tar: "application/x-tar",
+    parquet: "application/x-parquet",
+    feather: "application/octet-stream",
+    sav: "application/octet-stream",
+    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    xls: "application/vnd.ms-excel",
+  };
+
+  const describeBytes = (size: number) => {
+    if (size < 1024) {return `${size} B`;}
+    const kilo = size / 1024;
+    if (kilo < 1024) {return `${kilo.toFixed(1)} KB`;}
+    const mega = kilo / 1024;
+    if (mega < 1024) {return `${mega.toFixed(1)} MB`;}
+    const giga = mega / 1024;
+    return `${giga.toFixed(1)} GB`;
+  };
+
   const sendChatMessage = async (text: string, files: string[] = []) => {
     const binding = state.session;
     if (!binding) {
@@ -52,44 +114,66 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     // Build message parts
-    const parts: any[] = [];
+    const userTextParts: any[] = [];
+    const summaryParts: any[] = [];
+    const dataInfoParts: any[] = [];
+    const attachmentParts: any[] = [];
+    const fileMentions: string[] = [];
 
-    // Add text part if present
     if (text && text.trim()) {
-      parts.push({ type: "text", text });
+      userTextParts.push({ type: "text", text });
     }
 
-    // Add file parts if present
     if (files.length > 0) {
+      const dataFileExtensions = new Set(["csv", "tsv", "parquet", "xlsx", "xls", "feather", "sav"]);
       for (const filePath of files) {
         try {
           const uri = vscode.Uri.file(filePath);
-          const content = await vscode.workspace.fs.readFile(uri);
-          const relativePath = vscode.workspace.asRelativePath(uri);
+          const stat = await vscode.workspace.fs.stat(uri);
+          if (stat.size > MAX_ATTACHMENT_BYTES) {
+            void vscode.window.showWarningMessage(
+              `Skipped attaching ${filePath} because it exceeds ${(MAX_ATTACHMENT_BYTES / (1024 * 1024)).toFixed(1)} MB. ` +
+                "Large files are not supported in inline chat attachments."
+            );
+            continue;
+          }
 
-          // Determine media type based on file extension
           const ext = filePath.split(".").pop()?.toLowerCase() || "";
-          const mediaTypeMap: Record<string, string> = {
-            js: "text/javascript",
-            ts: "text/typescript",
-            jsx: "text/javascript",
-            tsx: "text/typescript",
-            py: "text/x-python",
-            json: "application/json",
-            md: "text/markdown",
-            html: "text/html",
-            css: "text/css",
-            txt: "text/plain",
-            csv: "text/csv",
-            ipynb: "application/x-ipynb+json",
-          };
-          const mediaType = mediaTypeMap[ext] || "text/plain";
+          const relativePath = vscode.workspace.asRelativePath(uri);
+          const absolutePath = uri.fsPath;
+          const displayPath = relativePath.startsWith("..") ? absolutePath : relativePath;
+          const sizeLabel = describeBytes(stat.size);
+
+          if (dataFileExtensions.has(ext)) {
+            dataInfoParts.push({
+              type: "text",
+              text: `Attached data file: ${displayPath} (absolute path: ${absolutePath}, size: ${sizeLabel})`,
+            });
+            fileMentions.push(`- data file: ${displayPath} (absolute path: ${absolutePath}, size: ${sizeLabel})`);
+            continue;
+          }
+
+          const content = await vscode.workspace.fs.readFile(uri);
+
+          const detected = MIME_TABLE[ext] || "";
+          const mediaType = detected || "application/octet-stream";
+          const isTextual = mediaType.startsWith("text/") || TEXTUAL_MIMES.has(mediaType);
+
+          fileMentions.push(`- file: ${displayPath} (mime: ${mediaType}, size: ${sizeLabel})`);
+
+          if (!isTextual) {
+            dataInfoParts.push({
+              type: "text",
+              text: `Attached file available on disk: ${absolutePath} (mime: ${mediaType}, size: ${sizeLabel})`,
+            });
+            continue;
+          }
 
           // Create data URI with base64 encoded content
           const base64Content = Buffer.from(content).toString("base64");
           const dataUri = `data:${mediaType};base64,${base64Content}`;
 
-          parts.push({
+          attachmentParts.push({
             type: "file",
             mime: mediaType,
             filename: relativePath,
@@ -101,6 +185,15 @@ export function activate(context: vscode.ExtensionContext) {
         }
       }
     }
+
+    if (fileMentions.length > 0) {
+      summaryParts.push({
+        type: "text",
+        text: `Attached files:\n${fileMentions.join("\n")}`,
+      });
+    }
+
+    const parts = [...userTextParts, ...summaryParts, ...dataInfoParts, ...attachmentParts];
 
     if (parts.length === 0) {
       console.warn("[opencode] No content to send (empty text and no files)");
@@ -282,6 +375,9 @@ export function activate(context: vscode.ExtensionContext) {
     chatDisposable,
   );
 
+  // Always register notebook sync - RTC server saves to disk, file watcher updates editor
+  registerNotebookSync(context);
+
   async function openTerminal(): Promise<number | undefined> {
     const port = Math.floor(Math.random() * (65535 - 16384 + 1)) + 16384;
     console.log(`[opencode] Creating terminal on port ${port}`);
@@ -301,8 +397,21 @@ export function activate(context: vscode.ExtensionContext) {
       return undefined;
     }
 
-    // Run local development version of opencode
-    terminal.sendText(`cd ${workspaceRoot}/packages/opencode && bun ./src/index.ts --port ${port}`);
+    const modelsUri = vscode.Uri.file(path.join(workspaceRoot, "packages/opencode/provider/models.local.json"));
+    const modelsExists = await vscode.workspace.fs.stat(modelsUri).then(
+      () => true,
+      () => false,
+    );
+    const modelsEnv = modelsExists ? `MODELS_JSON="${modelsUri.toString()}" ` : "";
+    const pythonPath = `${workspaceRoot}/packages/python/opencode_causal:${workspaceRoot}/packages/python`;
+    const pyEnv = `PYTHONPATH=\"${pythonPath}\" `;
+    if (!modelsExists) {
+      console.warn(`[opencode] Local models catalog missing at ${modelsUri.fsPath}, falling back to remote fetch`);
+    }
+
+    // Run local development version of opencode with local models catalog when available
+    const rtcEnv = useRtcNotebookSync() ? "OPENCODE_RTC_NOTEBOOK_SYNC=1 " : "";
+    terminal.sendText(`cd ${workspaceRoot}/packages/opencode && ${pyEnv}${modelsEnv}${rtcEnv}bun ./src/index.ts --port ${port}`);
 
     // Wait longer for server to start (120 attempts x 500ms = 60 seconds)
     // OpenCode TUI takes time to compile Go binaries on first run

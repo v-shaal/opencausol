@@ -115,6 +115,11 @@
           "default": 1200,
           "minimum": 250,
           "description": "Polling interval in milliseconds for causal workflow updates."
+        },
+        "opencode.causal.rtcNotebookSync": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable real-time notebook streaming via Yjs (experimental). Falls back to file watching when disabled."
         }
       }
     }
@@ -131,6 +136,10 @@
     "check-types": "tsc --noEmit",
     "lint": "eslint src",
     "test": "vscode-test"
+  },
+  "dependencies": {
+    "y-websocket": "^1.5.4",
+    "yjs": "^13.6.14"
   },
   "devDependencies": {
     "@types/vscode": "^1.94.0",

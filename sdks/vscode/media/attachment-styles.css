@@ -189,6 +189,23 @@
   border-color: var(--vscode-button-background);
 }
 
+.browse-btn {
+  padding: 0.45rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid var(--vscode-input-border);
+  background: var(--vscode-editorWidget-background);
+  color: var(--vscode-foreground);
+  cursor: pointer;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.browse-btn:hover {
+  background: var(--vscode-input-background);
+  border-color: var(--vscode-focusBorder);
+}
+
 /* Form Layout Override */
 #composer {
   display: flex;

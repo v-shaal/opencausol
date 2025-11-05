@@ -94,7 +94,41 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
         return;
       }
       void vscode.commands.executeCommand("opencode.openFile", filePath);
+      return;
     }
+    if (type === "browseFiles") {
+      void this.handleBrowseFiles();
+    }
+  }
+
+  private async handleBrowseFiles() {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    const dialogOptions: vscode.OpenDialogOptions = {
+      canSelectFiles: true,
+      canSelectFolders: false,
+      canSelectMany: true,
+      openLabel: "Attach",
+      defaultUri: workspaceFolder?.uri,
+    };
+
+    let picks: readonly vscode.Uri[] | undefined;
+    try {
+      picks = await vscode.window.showOpenDialog(dialogOptions);
+    } catch {
+      picks = undefined;
+    }
+
+    if (!picks) {
+      this.view?.webview.postMessage({ type: "browseFilesResult", files: [] });
+      return;
+    }
+
+    const files = picks.map((uri: vscode.Uri) => ({
+      path: uri.fsPath,
+      relativePath: vscode.workspace.asRelativePath(uri, false),
+    }));
+
+    this.view?.webview.postMessage({ type: "browseFilesResult", files });
   }
 
   private getHtml(webview: vscode.Webview) {
@@ -102,6 +136,9 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
     const cspSource = webview.cspSource;
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, "media", "chat-webview.js"));
     const attachmentHandlerUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, "media", "attachment-handler.js"));
+    // RTC notebook view disabled - notebooks update in main editor instead
+    // Keep variable for template compatibility, but script is commented out in HTML
+    const rtcScriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, "media", "rtc-notebook.js"));
     const attachmentStylesUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, "media", "attachment-styles.css"));
     const cacheBuster = Date.now();
     const defaultPoll = this.resolveSession()?.pollInterval ?? 1200;
@@ -113,6 +150,19 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
       header h1 {font-size: 1rem; margin: 0; font-weight: 600;}
       header .meta {font-size: 0.8rem; color: var(--vscode-descriptionForeground);}
       main {flex: 1; display: flex; flex-direction: column; overflow: hidden;}
+      #notebook-view {border-bottom: 1px solid var(--vscode-editorGroup-border); padding: 0.75rem 1rem; overflow-y: auto; max-height: 40vh; display: flex; flex-direction: column; gap: 0.6rem;}
+      #notebook-view.hidden {display: none;}
+      .rtc-notebook-header {font-size: 0.85rem; font-weight: 600;}
+      .rtc-notebook-status {font-size: 0.75rem; color: var(--vscode-descriptionForeground);}
+      .rtc-notebook-body {display: flex; flex-direction: column; gap: 0.5rem;}
+      .rtc-cell {border: 1px solid var(--vscode-editorWidget-border); border-radius: 6px; padding: 0.5rem; background: var(--vscode-editorWidget-background);}
+      .rtc-cell-header {font-size: 0.8rem; margin-bottom: 0.3rem; color: var(--vscode-descriptionForeground);}
+      .rtc-cell-body.code {background: var(--vscode-editor-background); border-radius: 4px; padding: 0.5rem; overflow-x: auto;}
+      .rtc-cell-outputs {margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.35rem;}
+      .rtc-output pre {margin: 0; padding: 0.4rem; border-radius: 4px; background: var(--vscode-editor-background); overflow-x: auto;}
+      .rtc-output-error pre {border: 1px solid var(--vscode-inputValidation-errorBorder);}
+      .rtc-output-display pre {border: 1px solid var(--vscode-inputValidation-infoBorder);}
+      .rtc-output-stream pre {border: 1px solid var(--vscode-editorWidget-border);}
       #messages {flex: 1; padding: 1rem; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem;}
       .msg {padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid var(--vscode-editorWidget-border); background: var(--vscode-editorWidget-background);}
       .msg.assistant {border-color: var(--vscode-inputValidation-infoBorder);}
@@ -131,6 +181,9 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
       .tool-entry .tool-header {font-weight: 600; margin-bottom: 0.25rem;}
       .tool-entry .tool-title {font-size: 0.9rem; color: var(--vscode-descriptionForeground); margin-bottom: 0.25rem;}
       .tool-entry .tool-output {font-size: 0.9rem;}
+      .attachment-buttons {display: flex; gap: 0.35rem; align-items: center; margin-right: 0.35rem;}
+      .browse-btn {padding: 0.4rem 0.6rem; border-radius: 6px; border: 1px solid var(--vscode-editorWidget-border); background: var(--vscode-editorWidget-background); color: var(--vscode-foreground); cursor: pointer;}
+      .browse-btn:hover {background: var(--vscode-editor-background);}
       form {border-top: 1px solid var(--vscode-editorGroup-border); padding: 0.75rem; display: flex; gap: 0.5rem;}
       textarea {flex: 1; resize: none; min-height: 3rem; max-height: 7rem; border-radius: 6px; border: 1px solid var(--vscode-input-border); padding: 0.5rem; background: var(--vscode-input-background); color: var(--vscode-input-foreground); font-family: inherit; font-size: inherit;}
       button {padding: 0.5rem 1rem; border-radius: 6px; border: none; cursor: pointer; background: var(--vscode-button-background); color: var(--vscode-button-foreground);}
@@ -149,7 +202,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
       <html lang="en">
         <head>
           <meta charset="UTF-8" />
-          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: https:; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src http://localhost:* https://localhost:*;" />
+          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: https:; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src http://localhost:* https://localhost:* ws://localhost:* wss://localhost:* http://127.0.0.1:* https://127.0.0.1:* ws://127.0.0.1:* wss://127.0.0.1:*;" />
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
           <style>${styles}</style>
           <link rel="stylesheet" nonce="${nonce}" href="${attachmentStylesUri}">
@@ -161,6 +214,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
             <div id="status">No session attached</div>
           </header>
           <main>
+            <!-- RTC notebook view removed - notebooks update in main editor instead -->
             <section id="messages"></section>
           </main>
           <form id="composer">
@@ -175,13 +229,18 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
             </div>
             <div id="selectedFiles" class="selected-files"></div>
             <div class="input-container">
-              <button type="button" id="attachBtn" class="attach-btn" title="Add files, folders, docs..." aria-label="Attach files">📎</button>
+              <div class="attachment-buttons">
+                <button type="button" id="attachBtn" class="attach-btn" title="Add files, folders, docs..." aria-label="Attach files">📎</button>
+                <button type="button" id="browseBtn" class="browse-btn" title="Browse for files" aria-label="Browse files">…</button>
+              </div>
               <textarea id="input" rows="3" placeholder="Ask about your causal workflow..."></textarea>
               <button type="submit">Send</button>
             </div>
           </form>
           <script nonce="${nonce}">window.__CAUSAL_CHAT_CONFIG__ = { pollInterval: ${defaultPoll} };</script>
           <script nonce="${nonce}" src="${attachmentHandlerUri}?v=${cacheBuster}"></script>
+          <!-- RTC notebook view disabled - notebooks update in main editor instead -->
+          <!-- <script nonce="${nonce}" src="${rtcScriptUri}?v=${cacheBuster}"></script> -->
           <script nonce="${nonce}" src="${scriptUri}?v=${cacheBuster}"></script>
         </body>
       </html>`;

@@ -62,6 +62,7 @@
       // DOM elements (will be set during initialization)
       this.elements = {
         attachBtn: null,
+        browseBtn: null,
         attachmentBar: null,
         attachmentList: null,
         selectedFiles: null,
@@ -77,6 +78,8 @@
       this.getSelectedFiles = this.getSelectedFiles.bind(this);
       this.clearSelection = this.clearSelection.bind(this);
       this.handleAvailableFiles = this.handleAvailableFiles.bind(this);
+      this.browseFiles = this.browseFiles.bind(this);
+      this.handleBrowseFilesResult = this.handleBrowseFilesResult.bind(this);
     }
 
     /**
@@ -85,6 +88,7 @@
     init() {
       // Get DOM elements
       this.elements.attachBtn = document.getElementById("attachBtn");
+      this.elements.browseBtn = document.getElementById("browseBtn");
       this.elements.attachmentBar = document.getElementById("attachmentBar");
       this.elements.attachmentList = document.getElementById("attachmentList");
       this.elements.selectedFiles = document.getElementById("selectedFiles");
@@ -96,6 +100,9 @@
 
       // Set up event listeners
       this.elements.attachBtn.addEventListener("click", this.toggleAttachmentBar);
+      if (this.elements.browseBtn) {
+        this.elements.browseBtn.addEventListener("click", this.browseFiles);
+      }
 
       // Set up tab buttons
       this.elements.tabBtns = Array.from(
@@ -145,6 +152,10 @@
       });
     }
 
+    browseFiles() {
+      this.vscode.postMessage({ type: "browseFiles" });
+    }
+
     /**
      * Handle available files response from extension
      */
@@ -167,6 +178,27 @@
       }
 
       this.renderAttachmentList();
+    }
+
+    handleBrowseFilesResult(data) {
+      if (!data || !Array.isArray(data.files)) {
+        return;
+      }
+
+      data.files.forEach((file) => {
+        if (file && file.path) {
+          this.state.selectedFiles.add(file.path);
+        }
+      });
+
+      this.renderSelectedFiles();
+      this.renderAttachmentList();
+
+      if (data.files.length > 0 && this.state.isOpen) {
+        this.state.isOpen = false;
+        this.elements.attachmentBar.classList.remove("active");
+        this.elements.attachBtn.classList.remove("active");
+      }
     }
 
     /**

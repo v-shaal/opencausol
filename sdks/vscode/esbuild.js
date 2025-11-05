@@ -24,27 +24,56 @@ const esbuildProblemMatcherPlugin = {
 }
 
 async function main() {
-  const ctx = await esbuild.context({
-    entryPoints: ["src/extension.ts"],
-    bundle: true,
-    format: "cjs",
-    minify: production,
-    sourcemap: !production,
-    sourcesContent: false,
-    platform: "node",
-    outfile: "dist/extension.js",
-    external: ["vscode"],
-    logLevel: "silent",
-    plugins: [
-      /* add to the end of plugins array */
-      esbuildProblemMatcherPlugin,
-    ],
-  })
+  const builds = [
+    {
+      name: "extension",
+      options: {
+        entryPoints: ["src/extension.ts"],
+        bundle: true,
+        format: "cjs",
+        minify: production,
+        sourcemap: !production,
+        sourcesContent: false,
+        platform: "node",
+        target: "node18",
+        outfile: "dist/extension.js",
+        external: ["vscode"],
+        logLevel: "silent",
+      },
+    },
+    {
+      name: "rtc-webview",
+      options: {
+        entryPoints: ["src/webview/rtcNotebook.ts"],
+        bundle: true,
+        format: "iife",
+        minify: production,
+        sourcemap: !production,
+        platform: "browser",
+        target: "es2020",
+        outfile: "media/rtc-notebook.js",
+        legalComments: "none",
+        logLevel: "silent",
+      },
+    },
+  ]
+
   if (watch) {
-    await ctx.watch()
+    const contexts = []
+    for (const build of builds) {
+      const ctx = await esbuild.context({
+        ...build.options,
+        plugins: [esbuildProblemMatcherPlugin],
+      })
+      await ctx.watch()
+      contexts.push(ctx)
+    }
   } else {
-    await ctx.rebuild()
-    await ctx.dispose()
+    for (const build of builds) {
+      await esbuild.build({
+        ...build.options,
+      })
+    }
   }
 }
 

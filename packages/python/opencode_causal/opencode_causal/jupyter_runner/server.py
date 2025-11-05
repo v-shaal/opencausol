@@ -212,6 +212,164 @@ def create_server() -> Server:
                     "required": ["name", "data"],
                 },
             ),
+            Tool(
+                name="cell_update",
+                description="Update an existing cell with new content. Use for fixing bugs or improving code in specific cells.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "cell_index": {
+                            "type": "integer",
+                            "description": "Index of cell to update (0-based). Use cell_list to find indices.",
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "New cell content (Python code)",
+                        },
+                        "execute": {
+                            "type": "boolean",
+                            "description": "Execute cell after updating (default: true)",
+                            "default": True,
+                        },
+                        "timeout": {
+                            "type": "number",
+                            "description": "Execution timeout in seconds (default: 60)",
+                            "default": 60,
+                        },
+                        "session_dir": {
+                            "type": "string",
+                            "description": "Session directory previously passed to kernel_ensure",
+                        },
+                        "analysis_name": {
+                            "type": "string",
+                            "description": "Short slug for the analysis",
+                        },
+                        "stage": {
+                            "type": "string",
+                            "description": "Stage identifier (e.g., 'eda', 'estimation')",
+                            "default": "analysis",
+                        },
+                    },
+                    "required": ["cell_index", "content"],
+                },
+            ),
+            Tool(
+                name="cell_update_last",
+                description="Update the last code cell. Convenient for bug fixing: see error in output → fix with cell_update_last.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "content": {
+                            "type": "string",
+                            "description": "New cell content (Python code)",
+                        },
+                        "execute": {
+                            "type": "boolean",
+                            "description": "Execute cell after updating (default: true)",
+                            "default": True,
+                        },
+                        "timeout": {
+                            "type": "number",
+                            "description": "Execution timeout in seconds (default: 60)",
+                            "default": 60,
+                        },
+                        "session_dir": {
+                            "type": "string",
+                            "description": "Session directory previously passed to kernel_ensure",
+                        },
+                        "analysis_name": {
+                            "type": "string",
+                            "description": "Short slug for the analysis",
+                        },
+                        "stage": {
+                            "type": "string",
+                            "description": "Stage identifier (e.g., 'eda', 'estimation')",
+                            "default": "analysis",
+                        },
+                    },
+                    "required": ["content"],
+                },
+            ),
+            Tool(
+                name="cell_delete",
+                description="Delete a cell from the notebook. Requires confirmation flag for safety. Use cell_list to find cell indices first.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "cell_index": {
+                            "type": "integer",
+                            "description": "Index of cell to delete (0-based)",
+                        },
+                        "confirmed": {
+                            "type": "boolean",
+                            "description": "Safety confirmation (must be true to proceed)",
+                        },
+                        "session_dir": {
+                            "type": "string",
+                            "description": "Session directory previously passed to kernel_ensure",
+                        },
+                        "analysis_name": {
+                            "type": "string",
+                            "description": "Short slug for the analysis",
+                        },
+                        "stage": {
+                            "type": "string",
+                            "description": "Stage identifier (e.g., 'eda', 'estimation')",
+                            "default": "analysis",
+                        },
+                    },
+                    "required": ["cell_index", "confirmed"],
+                },
+            ),
+            Tool(
+                name="cell_list",
+                description="List all cells in a notebook with metadata (index, type, content preview, execution status). Useful for finding cell indices before update/delete.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "cell_type": {
+                            "type": "string",
+                            "enum": ["code", "markdown"],
+                            "description": "Filter by cell type (optional)",
+                        },
+                        "session_dir": {
+                            "type": "string",
+                            "description": "Session directory previously passed to kernel_ensure",
+                        },
+                        "analysis_name": {
+                            "type": "string",
+                            "description": "Short slug for the analysis",
+                        },
+                        "stage": {
+                            "type": "string",
+                            "description": "Stage identifier (e.g., 'eda', 'estimation')",
+                            "default": "analysis",
+                        },
+                    },
+                },
+            ),
+            Tool(
+                name="cell_history",
+                description="Get audit trail of cell operations (update, delete) for a stage. Shows timestamps and content changes.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "session_dir": {
+                            "type": "string",
+                            "description": "Session directory previously passed to kernel_ensure",
+                        },
+                        "analysis_name": {
+                            "type": "string",
+                            "description": "Short slug for the analysis",
+                        },
+                        "stage": {
+                            "type": "string",
+                            "description": "Stage identifier (e.g., 'eda', 'estimation')",
+                            "default": "analysis",
+                        },
+                    },
+                },
+            ),
         ]
 
     @server.call_tool()
@@ -262,6 +420,61 @@ def create_server() -> Server:
 
                 km = resolve_manager(session_dir, analysis_name, create=True)
                 result = km.store_artifact(artifact_name, data, format, stage=stage)
+                return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+            elif name == "cell_update":
+                cell_index = arguments["cell_index"]
+                content = arguments["content"]
+                execute = arguments.get("execute", True)
+                timeout = arguments.get("timeout", 60)
+                session_dir = arguments.get("session_dir")
+                analysis_name = arguments.get("analysis_name")
+                stage = arguments.get("stage")
+
+                km = resolve_manager(session_dir, analysis_name, create=False)
+                result = km.update_cell(cell_index, content, stage, execute, timeout)
+                return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+            elif name == "cell_update_last":
+                content = arguments["content"]
+                execute = arguments.get("execute", True)
+                timeout = arguments.get("timeout", 60)
+                session_dir = arguments.get("session_dir")
+                analysis_name = arguments.get("analysis_name")
+                stage = arguments.get("stage")
+
+                km = resolve_manager(session_dir, analysis_name, create=False)
+                result = km.update_last_cell(content, stage, execute, timeout)
+                return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+            elif name == "cell_delete":
+                cell_index = arguments["cell_index"]
+                confirmed = arguments.get("confirmed", False)
+                session_dir = arguments.get("session_dir")
+                analysis_name = arguments.get("analysis_name")
+                stage = arguments.get("stage")
+
+                km = resolve_manager(session_dir, analysis_name, create=False)
+                result = km.delete_cell(cell_index, stage, confirmed)
+                return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+            elif name == "cell_list":
+                cell_type = arguments.get("cell_type")
+                session_dir = arguments.get("session_dir")
+                analysis_name = arguments.get("analysis_name")
+                stage = arguments.get("stage")
+
+                km = resolve_manager(session_dir, analysis_name, create=False)
+                result = km.list_cells(stage, cell_type)
+                return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+            elif name == "cell_history":
+                session_dir = arguments.get("session_dir")
+                analysis_name = arguments.get("analysis_name")
+                stage = arguments.get("stage")
+
+                km = resolve_manager(session_dir, analysis_name, create=False)
+                result = km.get_cell_history(stage)
                 return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
             else:

@@ -15,6 +15,7 @@ dependencies = [
     "faiss-cpu>=1.7.4",
     "sentence-transformers>=2.2.0",
     "anthropic>=0.18.0",
+    "jupyter-collaboration>=3.0.0",
 ]
 
 [project.optional-dependencies]
